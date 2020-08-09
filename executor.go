@@ -2,8 +2,10 @@ package tern
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 type mysqlExecutor struct {
@@ -11,7 +13,7 @@ type mysqlExecutor struct {
 	migrationsTable string
 }
 
-const mysqlMigrationsSchema = `
+const mysqlCreateMigrationsSchema = `
 CREATE TABLE IF NOT EXISTS %s (
 	version VARCHAR(13) PRIMARY KEY,
 	name VARCHAR(255),
@@ -19,29 +21,71 @@ CREATE TABLE IF NOT EXISTS %s (
 ) ENGINE=INNODB;	
 `
 
+const mysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
+
+type executor interface {
+	up(ctx context.Context, migrations Migrations) error
+}
+
 func newMysqlExecutor(db *sqlx.DB, tableName string) (*mysqlExecutor, error) {
 	return &mysqlExecutor{db: db, migrationsTable: tableName}, nil
 }
 
-func (e *mysqlExecutor) Up(ctx context.Context) error {
-	if err := e.createServiceTable(ctx); err != nil {
+func (e *mysqlExecutor) up(ctx context.Context, migrations Migrations) error {
+	if err := e.createMigrationsTable(ctx); err != nil {
+		return err
+	}
+
+	tx, err := e.db.BeginTxx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return err
+	}
+
+	versions, err := readVersions(tx, e.migrationsTable);
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	insertVersionQuery := e.createInsertVersionQuery()
+
+	for i := range migrations {
+		if !inVersions(migrations[i].Version, versions) {
+			if _, err := tx.ExecContext(ctx, migrations[i].Up); err != nil {
+				if rollbackErr := tx.Rollback(); rollbackErr != nil {
+					return errors.Wrap(err, rollbackErr.Error())
+				}
+			}
+
+			if _, err := tx.ExecContext(ctx, insertVersionQuery, migrations[i].Version, migrations[i].Name); err != nil {
+				if rollbackErr := tx.Rollback(); rollbackErr != nil {
+					return errors.Wrap(err, rollbackErr.Error())
+				}
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (e *mysqlExecutor) createInsertVersionQuery() string {
+	return fmt.Sprintf("INSERT INTO %s (version, name) VALUE (?, ?)", e.migrationsTable)
+}
+
+func (e *mysqlExecutor) createMigrationsTable(ctx context.Context) error {
+	if _, err := e.db.ExecContext(ctx, fmt.Sprintf(mysqlCreateMigrationsSchema, e.migrationsTable)); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (e *mysqlExecutor) createServiceTable(ctx context.Context) error {
-	if _, err := e.db.ExecContext(ctx, fmt.Sprintf(mysqlMigrationsSchema, e.migrationsTable)); err != nil {
+func (e *mysqlExecutor) dropMigrationsTable(ctx context.Context) error {
+	if _, err := e.db.ExecContext(ctx, fmt.Sprintf(mysqlDropMigrationsSchema, e.migrationsTable)); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-type executor interface {
-	Up(ctx context.Context) error
-	createServiceTable(ctx context.Context) error
 }
 
 func readVersions(tx *sqlx.Tx, migrationsTable string) ([]string, error) {
@@ -62,4 +106,14 @@ func readVersions(tx *sqlx.Tx, migrationsTable string) ([]string, error) {
 	}
 
 	return result, nil
+}
+
+func inVersions(version string, versions []string) bool {
+	for _, v := range versions {
+		if v == version {
+			return true
+		}
+	}
+
+	return false
 }

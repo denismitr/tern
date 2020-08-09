@@ -3,6 +3,7 @@ package tern
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -32,7 +33,7 @@ func Test_ItCanMigrateEverythingToSqliteDBFromAGivenFolder(t *testing.T) {
 
 	defer db.Close()
 
-	m, err := NewMigrator(db, UseLocalFolder("./valid/sqlite"))
+	m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
 	assert.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2 * time.Second)
@@ -54,11 +55,18 @@ func Test_ItCanMigrateEverythingToSqliteDBFromAGivenFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := tx.Commit(); err != nil {
+	assert.Len(t, versions, 2)
+
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(mysqlDropMigrationsSchema, "migrations")); err != nil {
+		if err := tx.Rollback(); err != nil {
+			t.Fatal(err)
+		}
 		t.Fatal(err)
 	}
 
-	assert.Len(t, versions, 2)
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 

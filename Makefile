@@ -3,3 +3,4 @@ up:
 
 down:
 	docker-compose down
+	docker-compose rm --force --stop -v

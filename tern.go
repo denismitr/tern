@@ -32,7 +32,12 @@ func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
 }
 
 func (m *Migrator) Up(ctx context.Context) error {
-	if err := m.ex.Up(ctx); err != nil {
+	migrations, err := m.conv.ReadAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := m.ex.up(ctx, migrations); err != nil {
 		return err
 	}
 

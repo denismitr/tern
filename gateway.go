@@ -8,11 +8,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type mysqlExecutor struct {
-	db *sqlx.DB
-	migrationsTable string
-}
-
 const mysqlCreateMigrationsSchema = `
 CREATE TABLE IF NOT EXISTS %s (
 	version VARCHAR(13) PRIMARY KEY,
@@ -23,15 +18,75 @@ CREATE TABLE IF NOT EXISTS %s (
 
 const mysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
 
-type executor interface {
+type gateway interface {
 	up(ctx context.Context, migrations Migrations) error
+	down(ctx context.Context, migrations Migrations) error
+	readVersions(context.Context) ([]string, error)
+	dropMigrationsTable(context.Context) error
 }
 
-func newMysqlExecutor(db *sqlx.DB, tableName string) (*mysqlExecutor, error) {
-	return &mysqlExecutor{db: db, migrationsTable: tableName}, nil
+type mysqlGateway struct {
+	db *sqlx.DB
+	migrationsTable string
 }
 
-func (e *mysqlExecutor) up(ctx context.Context, migrations Migrations) error {
+func (e *mysqlGateway) down(ctx context.Context, migrations Migrations) error {
+	tx, err := e.db.BeginTxx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return err
+	}
+
+	versions, err := readVersions(tx, e.migrationsTable);
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	deleteVersionQuery := e.createDeleteVersionQuery()
+
+	for i := range migrations {
+		if inVersions(migrations[i].Version, versions) {
+			if _, err := tx.ExecContext(ctx, migrations[i].Down); err != nil {
+				if rollbackErr := tx.Rollback(); rollbackErr != nil {
+					return errors.Wrap(err, rollbackErr.Error())
+				}
+			}
+
+			if _, err := tx.ExecContext(ctx, deleteVersionQuery, migrations[i].Version); err != nil {
+				if rollbackErr := tx.Rollback(); rollbackErr != nil {
+					return errors.Wrap(err, rollbackErr.Error())
+				}
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (e *mysqlGateway) readVersions(ctx context.Context) ([]string, error) {
+	tx, err := e.db.BeginTxx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := readVersions(tx, e.migrationsTable)
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
+func newMysqlGateway(db *sqlx.DB, tableName string) (*mysqlGateway, error) {
+	return &mysqlGateway{db: db, migrationsTable: tableName}, nil
+}
+
+func (e *mysqlGateway) up(ctx context.Context, migrations Migrations) error {
 	if err := e.createMigrationsTable(ctx); err != nil {
 		return err
 	}
@@ -68,11 +123,15 @@ func (e *mysqlExecutor) up(ctx context.Context, migrations Migrations) error {
 	return tx.Commit()
 }
 
-func (e *mysqlExecutor) createInsertVersionQuery() string {
+func (e *mysqlGateway) createInsertVersionQuery() string {
 	return fmt.Sprintf("INSERT INTO %s (version, name) VALUE (?, ?)", e.migrationsTable)
 }
 
-func (e *mysqlExecutor) createMigrationsTable(ctx context.Context) error {
+func (e *mysqlGateway) createDeleteVersionQuery() string {
+	return fmt.Sprintf("DELETE FROM %s WHERE version = ?;", e.migrationsTable)
+}
+
+func (e *mysqlGateway) createMigrationsTable(ctx context.Context) error {
 	if _, err := e.db.ExecContext(ctx, fmt.Sprintf(mysqlCreateMigrationsSchema, e.migrationsTable)); err != nil {
 		return err
 	}
@@ -80,7 +139,7 @@ func (e *mysqlExecutor) createMigrationsTable(ctx context.Context) error {
 	return nil
 }
 
-func (e *mysqlExecutor) dropMigrationsTable(ctx context.Context) error {
+func (e *mysqlGateway) dropMigrationsTable(ctx context.Context) error {
 	if _, err := e.db.ExecContext(ctx, fmt.Sprintf(mysqlDropMigrationsSchema, e.migrationsTable)); err != nil {
 		return err
 	}

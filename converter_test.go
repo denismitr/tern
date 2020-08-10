@@ -43,13 +43,16 @@ func Test_MigrationsCanBeReadFromLocalFolder(t *testing.T) {
 	migrations, err := c.ReadAll(ctx)
 
 	assert.NoError(t, err)
-	assert.Len(t, migrations, 2)
+	assert.Len(t, migrations, 3)
 
 	assert.Equal(t, "Create foo table", migrations[0].Name)
 	assert.Equal(t, "1596897167", migrations[0].Version)
 
 	assert.Equal(t, "Create bar table", migrations[1].Name)
 	assert.Equal(t, "1596897188", migrations[1].Version)
+
+	assert.Equal(t, "Create baz table", migrations[2].Name)
+	assert.Equal(t, "1597897177", migrations[2].Version)
 }
 
 func Test_VersionCanBeExtractedFromKey(t *testing.T) {

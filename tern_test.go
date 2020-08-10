@@ -2,8 +2,6 @@ package tern
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -25,7 +23,7 @@ func Test_MigratorCanBeInstantiated(t *testing.T) {
 	assert.NotNil(t, m)
 }
 
-func Test_ItCanMigrateEverythingToSqliteDBFromAGivenFolder(t *testing.T) {
+func Test_ItCanMigrateUpAndDownEverythingToMysqlDBFromAGivenFolder(t *testing.T) {
 	db, err := sqlx.Open("mysql", "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true")
 	if err != nil {
 		t.Fatal(err)
@@ -42,29 +40,34 @@ func Test_ItCanMigrateEverythingToSqliteDBFromAGivenFolder(t *testing.T) {
 	err = m.Up(ctx)
 	assert.NoError(t, err)
 
-	tx, err := db.BeginTxx(ctx, &sql.TxOptions{})
+	gateway, err := newMysqlGateway(db, "migrations")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	versions, err := readVersions(tx, "migrations")
+	versions, err := gateway.readVersions(ctx)
 	if err != nil {
-		if err := tx.Rollback(); err != nil {
-			t.Fatal(err)
-		}
 		t.Fatal(err)
 	}
 
-	assert.Len(t, versions, 2)
+	assert.Len(t, versions, 3)
 
-	if _, err := tx.ExecContext(ctx, fmt.Sprintf(mysqlDropMigrationsSchema, "migrations")); err != nil {
-		if err := tx.Rollback(); err != nil {
-			t.Fatal(err)
-		}
-		t.Fatal(err)
+	assert.Equal(t, "1596897167", versions[0])
+	assert.Equal(t, "1596897188", versions[1])
+	assert.Equal(t, "1597897177", versions[2])
+
+	if err := m.Down(ctx); err != nil {
+		assert.NoError(t, err)
 	}
 
-	if err := tx.Commit(); err != nil {
+	versionsAfterDown, err := gateway.readVersions(ctx)
+	if err != nil {
+		assert.NoError(t, err)
+	}
+
+	assert.Len(t, versionsAfterDown, 0)
+
+	if err := gateway.dropMigrationsTable(ctx); err != nil {
 		t.Fatal(err)
 	}
 }

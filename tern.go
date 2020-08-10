@@ -9,7 +9,7 @@ import (
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
 
 type Migrator struct {
-	ex   executor
+	ex   gateway
 	conv converter
 }
 
@@ -44,12 +44,25 @@ func (m *Migrator) Up(ctx context.Context) error {
 	return nil
 }
 
-func createExecutor(db *sqlx.DB, tableName string) (executor, error) {
+func (m *Migrator) Down(ctx context.Context) error {
+	migrations, err := m.conv.ReadAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := m.ex.down(ctx, migrations); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createExecutor(db *sqlx.DB, tableName string) (gateway, error) {
 	driver := db.DriverName()
 
 	switch driver {
 	case "mysql":
-		return newMysqlExecutor(db, tableName)
+		return newMysqlGateway(db, tableName)
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)

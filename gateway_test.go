@@ -19,8 +19,8 @@ func Test_ExecutorCanBeCreatedFromDriver(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, ex)
 
-	_, ok := ex.(*mysqlExecutor)
-	assert.True(t, ok, "should be a value of mysqlExecutor")
+	_, ok := ex.(*mysqlGateway)
+	assert.True(t, ok, "should be a value of mysqlGateway")
 }
 
 func Test_ItWillReturnErrorOnUnsupportedDBDriver(t *testing.T) {

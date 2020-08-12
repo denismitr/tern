@@ -102,7 +102,7 @@ func (e *mysqlGateway) up(ctx context.Context, migrations Migrations) error {
 		return err
 	}
 
-	insertVersionQuery := e.createInsertVersionQuery()
+	insertVersionQuery := e.createInsertVersionsQuery()
 
 	for i := range migrations {
 		if !inVersions(migrations[i].Version, versions) {
@@ -123,12 +123,12 @@ func (e *mysqlGateway) up(ctx context.Context, migrations Migrations) error {
 	return tx.Commit()
 }
 
-func (e *mysqlGateway) createInsertVersionQuery() string {
-	return fmt.Sprintf("INSERT INTO %s (version, name) VALUE (?, ?)", e.migrationsTable)
-}
-
 func (e *mysqlGateway) createDeleteVersionQuery() string {
 	return fmt.Sprintf("DELETE FROM %s WHERE version = ?;", e.migrationsTable)
+}
+
+func (e *mysqlGateway) createInsertVersionsQuery() string {
+	return fmt.Sprintf("INSERT INTO %s (version, name) VALUES (?, ?);", e.migrationsTable)
 }
 
 func (e *mysqlGateway) createMigrationsTable(ctx context.Context) error {
@@ -142,6 +142,31 @@ func (e *mysqlGateway) createMigrationsTable(ctx context.Context) error {
 func (e *mysqlGateway) dropMigrationsTable(ctx context.Context) error {
 	if _, err := e.db.ExecContext(ctx, fmt.Sprintf(mysqlDropMigrationsSchema, e.migrationsTable)); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (e *mysqlGateway) writeVersions(ctx context.Context, keys []string) error {
+	query := e.createInsertVersionsQuery()
+
+	tx, err := e.db.BeginTxx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return err
+	}
+
+	for i := range keys {
+		name := extractNameFromKey(keys[i], nameRegexp)
+		version, err := extractVersionFromKey(keys[i], versionRegexp)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+
+		if _, err := e.db.ExecContext(ctx, query, version, name); err != nil {
+			_ = tx.Rollback()
+			return errors.Wrapf(err, "could not insert migration with version [%s] and name [%s] to [%s] table", version, name, e.migrationsTable)
+		}
 	}
 
 	return nil

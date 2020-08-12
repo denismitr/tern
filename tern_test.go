@@ -72,4 +72,67 @@ func Test_ItCanMigrateUpAndDownEverythingToMysqlDBFromAGivenFolder(t *testing.T)
 	}
 }
 
+func Test_ItWillSkipMigrations_ThatAreAlreadyInMigrationsTable(t *testing.T) {
+	db, err := sqlx.Open("mysql", "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2 * time.Second)
+	defer cancel()
+
+	gateway, err := newMysqlGateway(db, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// given we already have a migrations table
+	if err := gateway.createMigrationsTable(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// given we have already migrated these 2 migrations
+	existingMigrations := []string{"1596897167_create_foo_table", "1596897188_create_bar_table"}
+	if err := gateway.writeVersions(ctx, existingMigrations); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+	assert.NoError(t, err)
+
+	err = m.Up(ctx)
+	assert.NoError(t, err)
+
+	versions, err := gateway.readVersions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// expect 3 versions in migrations table
+	assert.Len(t, versions, 3)
+	assert.Equal(t, "1596897167", versions[0])
+	assert.Equal(t, "1596897188", versions[1])
+	assert.Equal(t, "1597897177", versions[2])
+
+	// DO: execute down migrations to rollback all of them
+	if err := m.Down(ctx); err != nil {
+		assert.NoError(t, err)
+	}
+
+	versionsAfterDown, err := gateway.readVersions(ctx)
+	if err != nil {
+		assert.NoError(t, err)
+	}
+
+	// expect no versions in migrations table
+	assert.Len(t, versionsAfterDown, 0)
+
+	// DO: clean up
+	if err := gateway.dropMigrationsTable(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
 

@@ -169,7 +169,26 @@ func (e *mysqlGateway) writeVersions(ctx context.Context, keys []string) error {
 		}
 	}
 
-	return nil
+	return tx.Commit()
+}
+
+func (e *mysqlGateway) showTables() ([]string, error) {
+	rows, err := e.db.Query("SHOW TABLES;")
+	if err != nil {
+		return nil, errors.Wrap(err, "could not list all tables")
+	}
+
+	var result []string
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			_ = rows.Close()
+			return result, err
+		}
+		result = append(result, table)
+	}
+
+	return result, err
 }
 
 func readVersions(tx *sqlx.Tx, migrationsTable string) ([]string, error) {

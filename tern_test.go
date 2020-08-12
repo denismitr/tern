@@ -23,7 +23,7 @@ func Test_MigratorCanBeInstantiated(t *testing.T) {
 	assert.NotNil(t, m)
 }
 
-func Test_ItCanMigrateUpAndDownEverythingToMysqlDBFromAGivenFolder(t *testing.T) {
+func Test_ItCanMigrateUpAndDownEverythingToMysqlDB_FromACustomFolder(t *testing.T) {
 	db, err := sqlx.Open("mysql", "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true")
 	if err != nil {
 		t.Fatal(err)
@@ -37,8 +37,9 @@ func Test_ItCanMigrateUpAndDownEverythingToMysqlDBFromAGivenFolder(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 	defer cancel()
 
-	err = m.Up(ctx)
+	keys, err := m.Up(ctx)
 	assert.NoError(t, err)
+	assert.Len(t, keys, 3)
 
 	gateway, err := newMysqlGateway(db, "migrations")
 	if err != nil {
@@ -114,8 +115,9 @@ func Test_ItWillSkipMigrations_ThatAreAlreadyInMigrationsTable(t *testing.T) {
 	m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
 	assert.NoError(t, err)
 
-	err = m.Up(ctx)
+	keys, err := m.Up(ctx)
 	assert.NoError(t, err)
+	assert.Len(t, keys, 1)
 
 	versions, err := gateway.readVersions(ctx)
 	if err != nil {

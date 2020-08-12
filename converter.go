@@ -121,6 +121,7 @@ func (c localFSConverter) ReadOne(key string) (Migration, error) {
 		result.Down = string(downContents)
 	}
 
+	result.Key = key
 	result.Name = extractNameFromKey(key, nameRegexp) // fixme: no error
 	result.Version, err = extractVersionFromKey(key, versionRegexp)
 	if err != nil {

@@ -9,7 +9,6 @@ var ErrInvalidTimestamp = errors.New("invalid timestamp in migration filename")
 var versionRegexp *regexp.Regexp
 var nameRegexp *regexp.Regexp
 
-
 func init() {
 	var err error
 	versionRegexp, err = regexp.Compile(`^(?P<version>\d{1,12})(_\w+)?$`)
@@ -23,6 +22,7 @@ func init() {
 }
 
 type Migration struct {
+	Key     string
 	Name    string
 	Version string
 	Up      string
@@ -30,6 +30,13 @@ type Migration struct {
 }
 
 type Migrations []Migration
+
+func (m Migrations) Keys() (result []string) {
+	for i := range m {
+		result = append(result, m[i].Key)
+	}
+	return result
+}
 
 func (m Migrations) Len() int {
 	return len(m)

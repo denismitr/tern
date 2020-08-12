@@ -9,8 +9,8 @@ import (
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
 
 type Migrator struct {
-	ex   gateway
-	conv converter
+	ex        gateway
+	converter converter
 }
 
 func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
@@ -20,8 +20,8 @@ func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
 	}
 
 	m := &Migrator{
-		ex: ex,
-		conv: localFSConverter{folder: "./migrations"},
+		ex:        ex,
+		converter: localFSConverter{folder: "./migrations"},
 	}
 
 	for _, oFunc := range opts {
@@ -31,21 +31,21 @@ func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
 	return m, nil
 }
 
-func (m *Migrator) Up(ctx context.Context) error {
-	migrations, err := m.conv.ReadAll(ctx)
+func (m *Migrator) Up(ctx context.Context) ([]string, error) {
+	migrations, err := m.converter.ReadAll(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := m.ex.up(ctx, migrations); err != nil {
-		return err
+	if migrated, err := m.ex.up(ctx, migrations); err != nil {
+		return nil, err
+	} else {
+		return migrated.Keys(), nil
 	}
-
-	return nil
 }
 
 func (m *Migrator) Down(ctx context.Context) error {
-	migrations, err := m.conv.ReadAll(ctx)
+	migrations, err := m.converter.ReadAll(ctx)
 	if err != nil {
 		return err
 	}

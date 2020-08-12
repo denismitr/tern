@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS %s (
 const mysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
 
 type gateway interface {
-	up(ctx context.Context, migrations Migrations) error
+	up(ctx context.Context, migrations Migrations) (Migrations, error)
 	down(ctx context.Context, migrations Migrations) error
 	readVersions(context.Context) ([]string, error)
 	dropMigrationsTable(context.Context) error
@@ -86,41 +86,44 @@ func newMysqlGateway(db *sqlx.DB, tableName string) (*mysqlGateway, error) {
 	return &mysqlGateway{db: db, migrationsTable: tableName}, nil
 }
 
-func (e *mysqlGateway) up(ctx context.Context, migrations Migrations) error {
+func (e *mysqlGateway) up(ctx context.Context, migrations Migrations) (Migrations, error) {
 	if err := e.createMigrationsTable(ctx); err != nil {
-		return err
+		return nil, err
 	}
 
 	tx, err := e.db.BeginTxx(ctx, &sql.TxOptions{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	versions, err := readVersions(tx, e.migrationsTable);
 	if err != nil {
 		_ = tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	insertVersionQuery := e.createInsertVersionsQuery()
 
+	var migrated Migrations
 	for i := range migrations {
 		if !inVersions(migrations[i].Version, versions) {
 			if _, err := tx.ExecContext(ctx, migrations[i].Up); err != nil {
 				if rollbackErr := tx.Rollback(); rollbackErr != nil {
-					return errors.Wrap(err, rollbackErr.Error())
+					return nil, errors.Wrap(err, rollbackErr.Error())
 				}
 			}
 
 			if _, err := tx.ExecContext(ctx, insertVersionQuery, migrations[i].Version, migrations[i].Name); err != nil {
 				if rollbackErr := tx.Rollback(); rollbackErr != nil {
-					return errors.Wrap(err, rollbackErr.Error())
+					return nil, errors.Wrap(err, rollbackErr.Error())
 				}
 			}
+
+			migrated = append(migrated, migrations[i])
 		}
 	}
 
-	return tx.Commit()
+	return migrated, tx.Commit()
 }
 
 func (e *mysqlGateway) createDeleteVersionQuery() string {

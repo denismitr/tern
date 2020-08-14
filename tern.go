@@ -6,6 +6,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+const DefaultMigrationsTable = "migrations"
+const DefaultMigrationsFolder = "./migrations"
+
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
 
 type Migrator struct {
@@ -14,14 +17,14 @@ type Migrator struct {
 }
 
 func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
-	ex, err := createExecutor(db, "migrations")
+	ex, err := createExecutor(db, DefaultMigrationsTable)
 	if err != nil {
 		return nil, err
 	}
 
 	m := &Migrator{
 		ex:        ex,
-		converter: localFSConverter{folder: "./migrations"},
+		converter: localFSConverter{folder: DefaultMigrationsFolder},
 	}
 
 	for _, oFunc := range opts {
@@ -31,26 +34,37 @@ func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
 	return m, nil
 }
 
-func (m *Migrator) Up(ctx context.Context) ([]string, error) {
-	migrations, err := m.converter.ReadAll(ctx)
+func (m *Migrator) Up(ctx context.Context, cfs ...ActionConfigurator) ([]string, error) {
+	act := new(action)
+	for _, f := range cfs {
+		f(act)
+	}
+
+	migrations, err := m.converter.Convert(ctx, filter{})
 	if err != nil {
 		return nil, err
 	}
 
-	if migrated, err := m.ex.up(ctx, migrations); err != nil {
+	p := plan{steps: act.steps}
+	if migrated, err := m.ex.up(ctx, migrations, p); err != nil {
 		return nil, err
 	} else {
 		return migrated.Keys(), nil
 	}
 }
 
-func (m *Migrator) Down(ctx context.Context) error {
-	migrations, err := m.converter.ReadAll(ctx)
+func (m *Migrator) Down(ctx context.Context, cfs ...ActionConfigurator) error {
+	act := new(action)
+	for _, f := range cfs {
+		f(act)
+	}
+
+	migrations, err := m.converter.Convert(ctx, filter{})
 	if err != nil {
 		return err
 	}
 
-	if err := m.ex.down(ctx, migrations); err != nil {
+	if err := m.ex.down(ctx, migrations, plan{steps: act.steps}); err != nil {
 		return err
 	}
 

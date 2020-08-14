@@ -159,4 +159,57 @@ func Test_ItWillSkipMigrations_ThatAreAlreadyInMigrationsTable(t *testing.T) {
 	}
 }
 
+func Test_RunSingleMigration_WhenStepIsOne(t *testing.T) {
+	db, err := sqlx.Open("mysql", "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2 * time.Second)
+	defer cancel()
+
+	m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+	assert.NoError(t, err)
+
+	keys, err := m.Up(ctx, WithSteps(1))
+	assert.NoError(t, err)
+	assert.Len(t, keys, 1)
+
+	gateway, err := newMysqlGateway(db, DefaultMigrationsTable)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	versions, err := gateway.readVersions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// expect 3 versions in migrations table
+	assert.Len(t, versions, 1)
+	assert.Equal(t, "1596897167", versions[0])
+
+	// expect 2 tables to exist now in the DB
+	// the migrations table and baz table created by the only script that ran
+	tables, err := gateway.showTables()
+	if err != nil {
+		assert.NoError(t, err)
+	}
+
+	assert.Len(t, tables, 2)
+	assert.Equal(t, []string{"foo", DefaultMigrationsTable}, tables)
+
+	// DO: execute down migrations to rollback all of them
+	if err := m.Down(ctx); err != nil {
+		assert.NoError(t, err)
+	}
+
+	// DO: clean up
+	if err := gateway.dropMigrationsTable(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
 

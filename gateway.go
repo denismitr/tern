@@ -18,9 +18,13 @@ CREATE TABLE IF NOT EXISTS %s (
 
 const mysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
 
+type plan struct {
+	steps int
+}
+
 type gateway interface {
-	up(ctx context.Context, migrations Migrations) (Migrations, error)
-	down(ctx context.Context, migrations Migrations) error
+	up(ctx context.Context, migrations Migrations, p plan) (Migrations, error)
+	down(ctx context.Context, migrations Migrations, p plan) error
 	readVersions(context.Context) ([]string, error)
 	dropMigrationsTable(context.Context) error
 }
@@ -30,7 +34,7 @@ type mysqlGateway struct {
 	migrationsTable string
 }
 
-func (e *mysqlGateway) down(ctx context.Context, migrations Migrations) error {
+func (e *mysqlGateway) down(ctx context.Context, migrations Migrations, p plan) error {
 	tx, err := e.db.BeginTxx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return err
@@ -86,7 +90,7 @@ func newMysqlGateway(db *sqlx.DB, tableName string) (*mysqlGateway, error) {
 	return &mysqlGateway{db: db, migrationsTable: tableName}, nil
 }
 
-func (e *mysqlGateway) up(ctx context.Context, migrations Migrations) (Migrations, error) {
+func (e *mysqlGateway) up(ctx context.Context, migrations Migrations, p plan) (Migrations, error) {
 	if err := e.createMigrationsTable(ctx); err != nil {
 		return nil, err
 	}
@@ -104,23 +108,32 @@ func (e *mysqlGateway) up(ctx context.Context, migrations Migrations) (Migration
 
 	insertVersionQuery := e.createInsertVersionsQuery()
 
-	var migrated Migrations
+	var scheduled Migrations
 	for i := range migrations {
 		if !inVersions(migrations[i].Version, versions) {
-			if _, err := tx.ExecContext(ctx, migrations[i].Up); err != nil {
-				if rollbackErr := tx.Rollback(); rollbackErr != nil {
-					return nil, errors.Wrap(err, rollbackErr.Error())
-				}
+			if p.steps != 0 && len(scheduled) >= p.steps {
+				break
 			}
 
-			if _, err := tx.ExecContext(ctx, insertVersionQuery, migrations[i].Version, migrations[i].Name); err != nil {
-				if rollbackErr := tx.Rollback(); rollbackErr != nil {
-					return nil, errors.Wrap(err, rollbackErr.Error())
-				}
-			}
-
-			migrated = append(migrated, migrations[i])
+			scheduled = append(scheduled, migrations[i])
 		}
+	}
+
+	var migrated Migrations
+	for i := range scheduled {
+		if _, err := tx.ExecContext(ctx, scheduled[i].Up); err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				return nil, errors.Wrap(err, rollbackErr.Error())
+			}
+		}
+
+		if _, err := tx.ExecContext(ctx, insertVersionQuery, scheduled[i].Version, scheduled[i].Name); err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				return nil, errors.Wrap(err, rollbackErr.Error())
+			}
+		}
+
+		migrated = append(migrated, scheduled[i])
 	}
 
 	return migrated, tx.Commit()

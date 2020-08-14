@@ -8,3 +8,15 @@ func UseLocalFolder(folder string) OptionFunc {
 		m.converter = conv
 	}
 }
+
+type action struct {
+	steps int
+}
+
+type ActionConfigurator func (a *action)
+
+func WithSteps(steps int) ActionConfigurator {
+	return func (a *action) {
+		a.steps = steps
+	}
+}

@@ -10,8 +10,10 @@ import (
 	"time"
 )
 
+const defaultMysqlStubs = "./stubs/valid/mysql"
+
 func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
-	folder, err := filepath.Abs("./stubs/single/mysql")
+	folder, err := filepath.Abs(defaultMysqlStubs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +22,7 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 	key := "1596897167_create_foo_table"
 
 
-	m, err := c.ReadOne(key)
+	m, err := c.readOne(key)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "1596897167", m.Version)
@@ -29,30 +31,70 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 	assert.Equal(t, "DROP TABLE IF EXISTS foo;", m.Down)
 }
 
-func Test_MigrationsCanBeReadFromLocalFolder(t *testing.T) {
-	folder, err := filepath.Abs("./stubs/valid/mysql")
-	if err != nil {
-		t.Fatal(err)
-	}
+func Test_ConvertLocalFolder(t *testing.T) {
+	t.Run("all migrations can be read from local folder", func(t *testing.T) {
+		folder, err := filepath.Abs(defaultMysqlStubs)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	c := localFSConverter{folder: folder}
+		c := localFSConverter{folder: folder}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
+		defer cancel()
 
-	migrations, err := c.ReadAll(ctx)
+		migrations, err := c.Convert(ctx, filter{})
 
-	assert.NoError(t, err)
-	assert.Len(t, migrations, 3)
+		assert.NoError(t, err)
+		assert.Len(t, migrations, 3)
 
-	assert.Equal(t, "Create foo table", migrations[0].Name)
-	assert.Equal(t, "1596897167", migrations[0].Version)
+		assert.Equal(t, "Create foo table", migrations[0].Name)
+		assert.Equal(t, "1596897167", migrations[0].Version)
+		assert.Equal(t, "1596897167_create_foo_table", migrations[0].Key)
+		assert.Equal(t, "CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;", migrations[0].Up)
+		assert.Equal(t, "DROP TABLE IF EXISTS foo;", migrations[0].Down)
 
-	assert.Equal(t, "Create bar table", migrations[1].Name)
-	assert.Equal(t, "1596897188", migrations[1].Version)
+		assert.Equal(t, "Create bar table", migrations[1].Name)
+		assert.Equal(t, "1596897188", migrations[1].Version)
+		assert.Equal(t, "1596897188_create_bar_table", migrations[1].Key)
+		assert.Equal(t, "CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;", migrations[1].Up)
+		assert.Equal(t, "DROP TABLE IF EXISTS bar;", migrations[1].Down)
 
-	assert.Equal(t, "Create baz table", migrations[2].Name)
-	assert.Equal(t, "1597897177", migrations[2].Version)
+		assert.Equal(t, "Create baz table", migrations[2].Name)
+		assert.Equal(t, "1597897177", migrations[2].Version)
+		assert.Equal(t, "1597897177_create_baz_table", migrations[2].Key)
+		assert.Equal(t, "CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;", migrations[2].Up)
+		assert.Equal(t, "DROP TABLE IF EXISTS baz;", migrations[2].Down)
+	})
+
+	t.Run("specified migrations can be read from local folder", func(t *testing.T) {
+		folder, err := filepath.Abs(defaultMysqlStubs)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c := localFSConverter{folder: folder}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
+		defer cancel()
+
+		migrations, err := c.Convert(ctx, filter{keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
+
+		assert.NoError(t, err)
+		assert.Len(t, migrations, 2)
+
+		assert.Equal(t, "Create bar table", migrations[0].Name)
+		assert.Equal(t, "1596897188", migrations[0].Version)
+		assert.Equal(t, "1596897188_create_bar_table", migrations[0].Key)
+		assert.Equal(t, "CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;", migrations[0].Up)
+		assert.Equal(t, "DROP TABLE IF EXISTS bar;", migrations[0].Down)
+
+		assert.Equal(t, "Create baz table", migrations[1].Name)
+		assert.Equal(t, "1597897177", migrations[1].Version)
+		assert.Equal(t, "1597897177_create_baz_table", migrations[1].Key)
+		assert.Equal(t, "CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;", migrations[1].Up)
+		assert.Equal(t, "DROP TABLE IF EXISTS baz;", migrations[1].Down)
+	})
 }
 
 func Test_VersionCanBeExtractedFromKey(t *testing.T) {

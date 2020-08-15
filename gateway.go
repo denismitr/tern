@@ -18,20 +18,49 @@ CREATE TABLE IF NOT EXISTS %s (
 
 const mysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
 
+const mysqlDefaultLockKey = "tern_migrations"
+const mysqlDefaultLockSeconds = 3
+
 type plan struct {
 	steps int
 }
 
+type locker interface {
+	lock(ctx context.Context) error
+	unlock(ctx context.Context) error
+}
+
 type gateway interface {
+	locker
 	up(ctx context.Context, migrations Migrations, p plan) (Migrations, error)
 	down(ctx context.Context, migrations Migrations, p plan) error
-	readVersions(context.Context) ([]string, error)
-	dropMigrationsTable(context.Context) error
 }
 
 type mysqlGateway struct {
-	db *sqlx.DB
+	db              *sqlx.DB
 	migrationsTable string
+	lockKey         string
+	lockFor         int
+}
+
+func (e *mysqlGateway) lock(ctx context.Context) error {
+	query := fmt.Sprintf("SELECT GET_LOCK('%s', %d)", e.lockKey, e.lockFor)
+
+	if _, err := e.db.ExecContext(ctx, query); err != nil {
+		return errors.Wrapf(err, "could not obtain [%s] exclusive MySQL DB lock for [%d] seconds", e.lockKey, e.lockFor)
+	}
+
+	return nil
+}
+
+func (e *mysqlGateway) unlock(ctx context.Context) error {
+	query := fmt.Sprintf("SELECT RELEASE_ALL_LOCKS();") // fixme
+
+	if _, err := e.db.ExecContext(ctx, query); err != nil {
+		return errors.Wrapf(err, "could not release [%s] exclusive MySQL DB lock", e.lockKey)
+	}
+
+	return nil
 }
 
 func (e *mysqlGateway) down(ctx context.Context, migrations Migrations, p plan) error {
@@ -40,7 +69,7 @@ func (e *mysqlGateway) down(ctx context.Context, migrations Migrations, p plan) 
 		return err
 	}
 
-	versions, err := readVersions(tx, e.migrationsTable);
+	versions, err := readVersions(tx, e.migrationsTable)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -86,8 +115,13 @@ func (e *mysqlGateway) readVersions(ctx context.Context) ([]string, error) {
 	return result, nil
 }
 
-func newMysqlGateway(db *sqlx.DB, tableName string) (*mysqlGateway, error) {
-	return &mysqlGateway{db: db, migrationsTable: tableName}, nil
+func newMysqlGateway(db *sqlx.DB, tableName, lockKey string, lockFor int) (*mysqlGateway, error) {
+	return &mysqlGateway{
+		db: db,
+		migrationsTable: tableName,
+		lockKey: lockKey,
+		lockFor: lockFor,
+	}, nil
 }
 
 func (e *mysqlGateway) up(ctx context.Context, migrations Migrations, p plan) (Migrations, error) {
@@ -100,7 +134,7 @@ func (e *mysqlGateway) up(ctx context.Context, migrations Migrations, p plan) (M
 		return nil, err
 	}
 
-	versions, err := readVersions(tx, e.migrationsTable);
+	versions, err := readVersions(tx, e.migrationsTable)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, err
@@ -188,8 +222,8 @@ func (e *mysqlGateway) writeVersions(ctx context.Context, keys []string) error {
 	return tx.Commit()
 }
 
-func (e *mysqlGateway) showTables() ([]string, error) {
-	rows, err := e.db.Query("SHOW TABLES;")
+func (e *mysqlGateway) showTables(ctx context.Context) ([]string, error) {
+	rows, err := e.db.QueryContext(ctx, "SHOW TABLES;")
 	if err != nil {
 		return nil, errors.Wrap(err, "could not list all tables")
 	}
@@ -235,4 +269,15 @@ func inVersions(version string, versions []string) bool {
 	}
 
 	return false
+}
+
+func createExecutor(db *sqlx.DB, migrationsTable string) (gateway, error) {
+	driver := db.DriverName()
+
+	switch driver {
+	case "mysql":
+		return newMysqlGateway(db, migrationsTable, mysqlDefaultLockKey, mysqlDefaultLockSeconds)
+	}
+
+	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
 }

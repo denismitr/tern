@@ -18,7 +18,7 @@ const defaultUpExtension = ".up.sql"
 const defaultDownExtension = ".down.sql"
 
 var ErrNotAMigrationFile = errors.New("not a migration file")
-var ErrTooManyFilesForKey = errors.New("too many files for single key")
+var ErrTooManyFilesForKey = errors.New("too many files for single mysqlDefaultLockKey")
 
 type filter struct {
 	keys  []string

@@ -1,11 +1,23 @@
 package tern
 
-type OptionFunc func(m *Migrator)
+import "github.com/jmoiron/sqlx"
+
+type OptionFunc func(m *Migrator, db *sqlx.DB)
 
 func UseLocalFolder(folder string) OptionFunc {
-	return func(m *Migrator) {
-		conv := localFSConverter{folder: folder}
-		m.converter = conv
+	return func(m *Migrator, _ *sqlx.DB) {
+		m.converter = localFSConverter{folder: folder}
+	}
+}
+
+func WithMysqlConfig(migrationsTable, lockKey string, lockFor int) OptionFunc {
+	return func(m *Migrator, db *sqlx.DB) {
+		m.ex = &mysqlGateway{
+			db: db,
+			migrationsTable: migrationsTable,
+			lockFor: lockFor,
+			lockKey: lockKey,
+		}
 	}
 }
 

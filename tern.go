@@ -5,7 +5,6 @@ import (
 	"github.com/denismitr/tern/converter"
 	"github.com/denismitr/tern/database"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 )
 
 type Migrator struct {
@@ -30,7 +29,7 @@ func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
 	}
 
 	if m.gateway == nil {
-		gateway, err := database.Create(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateGateway(db, database.DefaultMigrationsTable)
 		if err != nil {
 			return nil, err
 		}
@@ -45,17 +44,6 @@ func (m *Migrator) Up(ctx context.Context, cfs ...ActionConfigurator) ([]string,
 	for _, f := range cfs {
 		f(act)
 	}
-
-	// fixme: make internal
-	if err := m.gateway.Lock(ctx); err != nil {
-		return nil, errors.Wrap(err, "migrations up lock failed")
-	}
-
-	defer func() {
-		if err := m.gateway.Unlock(ctx); err != nil {
-			panic(err) // fixme
-		}
-	}()
 
 	migrations, err := m.converter.Convert(ctx, converter.Filter{})
 	if err != nil {
@@ -76,16 +64,6 @@ func (m *Migrator) Down(ctx context.Context, cfs ...ActionConfigurator) error {
 	for _, f := range cfs {
 		f(act)
 	}
-
-	if err := m.gateway.Lock(ctx); err != nil {
-		return errors.Wrap(err, "down migrations lock failed")
-	}
-
-	defer func() {
-		if err := m.gateway.Unlock(ctx); err != nil {
-			panic(err) // fixme
-		}
-	}()
 
 	migrations, err := m.converter.Convert(ctx, converter.Filter{})
 	if err != nil {

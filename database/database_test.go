@@ -16,7 +16,7 @@ func Test_MySQLGateway_CanBeCreatedFromDriver(t *testing.T) {
 
 	defer db.Close()
 
-	gateway, err := Create(db, "migrations")
+	gateway, err := CreateGateway(db, "migrations")
 	assert.NoError(t, err)
 	assert.NotNil(t, gateway)
 
@@ -34,7 +34,7 @@ func Test_ItWillReturnErrorOnUnsupportedDBDriver(t *testing.T) {
 
 	defer db.Close()
 
-	gateway, err := Create(db, "migrations")
+	gateway, err := CreateGateway(db, "migrations")
 	assert.Error(t, err)
 	assert.True(t, errors.Is(err, ErrUnsupportedDBDriver))
 	assert.Nil(t, gateway)

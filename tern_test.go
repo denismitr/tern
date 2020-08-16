@@ -46,7 +46,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 3)
 
-		gateway, err := database.Create(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		gateway, err := database.Create(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,8 +109,8 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		// given we have already migrated these 2 migrations
 		existingMigrations := migration.Migrations(
 			[]migration.Migration{
-				{Key: "1596897167_create_foo_table", Name: "Create foo table", Version: "1596897167"},
-				{Key: "1596897188_create_bar_table", Name: "Create bar table", Version: "1596897188"},
+				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: "1596897167"},
+				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: "1596897188"},
 			},
 		)
 
@@ -165,7 +165,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		gateway, err := database.Create(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -180,9 +180,9 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		// given we have already migrated these 2 migrations
 		existingMigrations := migration.Migrations(
 			[]migration.Migration{
-				{Key: "1596897167_create_foo_table", Name: "Create foo table", Version: "1596897167"},
-				{Key: "1596897188_create_bar_table", Name: "Create bar table", Version: "1596897188"},
-				{Key: "1597897177_create_bar_table", Name: "Create baz table", Version: "1597897177"},
+				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: "1596897167"},
+				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: "1596897188"},
+				{Key: "1597897177_create_bar_table", Name: "CreateGateway baz table", Version: "1597897177"},
 			},
 		)
 
@@ -244,7 +244,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
-		gateway, err := database.Create(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -7,7 +7,6 @@ import (
 	"github.com/denismitr/tern/migration"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-	"io"
 )
 
 const mysqlCreateMigrationsSchema = `
@@ -23,35 +22,36 @@ const MysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
 const MysqlDefaultLockKey = "tern_migrations"
 const MysqlDefaultLockSeconds = 3
 
-var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
-
-type Locker interface {
-	Lock(ctx context.Context) error
-	Unlock(ctx context.Context) error
-}
-
-type Gateway interface {
-	Locker
-	io.Closer
-	WriteVersions(ctx context.Context, migrations migration.Migrations) error
-	ReadVersions(ctx context.Context) ([]string, error)
-	ShowTables(ctx context.Context) ([]string, error)
-	Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
-	Down(ctx context.Context, migrations migration.Migrations, p Plan) error
-	DropMigrationsTable(ctx context.Context) error
-	CreateMigrationsTable(ctx context.Context) error
-}
-
 type Plan struct {
 	Steps int
+}
+
+type mySQLLocker struct {
+	lockKey string
+	lockFor int
+}
+
+func (g *mySQLLocker) lock(ctx context.Context, conn *sql.Conn) error {
+	if _, err := conn.ExecContext(ctx, "SELECT GET_LOCK(?, ?)", g.lockKey, g.lockFor); err != nil {
+		return errors.Wrapf(err, "could not obtain [%s] exclusive MySQL DB lock for [%d] seconds", g.lockKey, g.lockFor)
+	}
+
+	return nil
+}
+
+func (g *mySQLLocker) unlock(ctx context.Context, conn *sql.Conn) error {
+	if _, err := conn.ExecContext(ctx, "SELECT RELEASE_LOCK(?)", g.lockKey); err != nil {
+		return errors.Wrapf(err, "could not release [%s] exclusive MySQL DB lock", g.lockKey)
+	}
+
+	return nil
 }
 
 type MySQL struct {
 	db              *sqlx.DB
 	conn            *sql.Conn
 	migrationsTable string
-	lockKey         string
-	lockFor         int
+	locker          locker
 }
 
 func (g *MySQL) Close() error {
@@ -62,23 +62,76 @@ func (g *MySQL) Close() error {
 	return nil
 }
 
-func (g *MySQL) Lock(ctx context.Context) error {
-	if _, err := g.conn.ExecContext(ctx, "SELECT GET_LOCK(?, ?)", g.lockKey, g.lockFor); err != nil {
-		return errors.Wrapf(err, "could not obtain [%s] exclusive MySQL DB lock for [%d] seconds", g.lockKey, g.lockFor)
+func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
+	if err := g.locker.lock(ctx, g.conn); err != nil {
+		return nil, errors.Wrap(err, "migrations up lock failed")
 	}
 
-	return nil
-}
+	defer func() {
+		if err := g.locker.unlock(ctx, g.conn); err != nil {
+			panic(err) // fixme
+		}
+	}()
 
-func (g *MySQL) Unlock(ctx context.Context) error {
-	if _, err := g.conn.ExecContext(ctx, "SELECT RELEASE_LOCK(?)", g.lockKey); err != nil {
-		return errors.Wrapf(err, "could not release [%s] exclusive MySQL DB lock", g.lockKey)
+	if err := g.CreateMigrationsTable(ctx); err != nil {
+		return nil, err
 	}
 
-	return nil
+	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	versions, err := readVersions(tx, g.migrationsTable)
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+
+	insertVersionQuery := g.createInsertVersionsQuery()
+
+	var scheduled migration.Migrations
+	for i := range migrations {
+		if !inVersions(migrations[i].Version, versions) {
+			if p.Steps != 0 && len(scheduled) >= p.Steps {
+				break
+			}
+
+			scheduled = append(scheduled, migrations[i])
+		}
+	}
+
+	var migrated migration.Migrations
+	for i := range scheduled {
+		if _, err := tx.ExecContext(ctx, scheduled[i].Up); err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				return nil, errors.Wrap(err, rollbackErr.Error())
+			}
+		}
+
+		if _, err := tx.ExecContext(ctx, insertVersionQuery, scheduled[i].Version, scheduled[i].Name); err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				return nil, errors.Wrap(err, rollbackErr.Error())
+			}
+		}
+
+		migrated = append(migrated, scheduled[i])
+	}
+
+	return migrated, tx.Commit()
 }
 
 func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) error {
+	if err := g.locker.lock(ctx, g.conn); err != nil {
+		return errors.Wrap(err, "down migrations lock failed")
+	}
+
+	defer func() {
+		if err := g.locker.unlock(ctx, g.conn); err != nil {
+			panic(err)
+		}
+	}()
+
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return err
@@ -140,58 +193,11 @@ func NewMysqlGateway(db *sqlx.DB, tableName, lockKey string, lockFor int) (*MySQ
 		db:              db,
 		conn:            conn,
 		migrationsTable: tableName,
-		lockKey:         lockKey,
-		lockFor:         lockFor,
+		locker: &mySQLLocker{
+			lockKey: lockKey,
+			lockFor: lockFor,
+		},
 	}, nil
-}
-
-func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
-	if err := g.CreateMigrationsTable(ctx); err != nil {
-		return nil, err
-	}
-
-	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	versions, err := readVersions(tx, g.migrationsTable)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-
-	insertVersionQuery := g.createInsertVersionsQuery()
-
-	var scheduled migration.Migrations
-	for i := range migrations {
-		if !inVersions(migrations[i].Version, versions) {
-			if p.Steps != 0 && len(scheduled) >= p.Steps {
-				break
-			}
-
-			scheduled = append(scheduled, migrations[i])
-		}
-	}
-
-	var migrated migration.Migrations
-	for i := range scheduled {
-		if _, err := tx.ExecContext(ctx, scheduled[i].Up); err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				return nil, errors.Wrap(err, rollbackErr.Error())
-			}
-		}
-
-		if _, err := tx.ExecContext(ctx, insertVersionQuery, scheduled[i].Version, scheduled[i].Name); err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				return nil, errors.Wrap(err, rollbackErr.Error())
-			}
-		}
-
-		migrated = append(migrated, scheduled[i])
-	}
-
-	return migrated, tx.Commit()
 }
 
 func (g *MySQL) createDeleteVersionQuery() string {

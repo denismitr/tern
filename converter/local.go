@@ -1,44 +1,51 @@
-package tern
+package converter
 
 import (
 	"context"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 	"regexp"
+	"github.com/denismitr/tern/migration"
+	"github.com/pkg/errors"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
-	"unicode"
 )
 
-const defaultUpExtension = ".up.sql"
-const defaultDownExtension = ".down.sql"
+const DefaultMigrationsFolder = "./migrations"
 
-var ErrNotAMigrationFile = errors.New("not a migration file")
-var ErrTooManyFilesForKey = errors.New("too many files for single mysqlDefaultLockKey")
-
-type filter struct {
-	keys  []string
-}
-
-type converter interface {
-	Convert(ctx context.Context, f filter) (Migrations, error)
-}
-
-type localFSConverter struct {
+type LocalFSConverter struct {
 	folder string
+	versionRegexp *regexp.Regexp
+	nameRegexp *regexp.Regexp
 }
 
-func (c localFSConverter) Convert(ctx context.Context, f filter) (Migrations, error) {
+func NewLocalFSConverter(folder string) (*LocalFSConverter, error) {
+	versionRegexp, err := regexp.Compile(`^(?P<version>\d{1,12})(_\w+)?$`)
+	if err != nil {
+		return nil, err
+	}
+	nameRegexp, err := regexp.Compile(`^\d{1,12}_(?P<name>\w+[\w_-]+)?$`)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LocalFSConverter{
+		folder: folder,
+		versionRegexp: versionRegexp,
+		nameRegexp: nameRegexp,
+	}, nil
+}
+
+func (c *LocalFSConverter) Convert(ctx context.Context, f Filter) (migration.Migrations, error) {
 	keys, err := c.getAllKeysFromFolder(f.keys)
 	if err != nil {
 		return nil, err
 	}
 
-	migrationsCh := make(chan Migration)
+	migrationsCh := make(chan migration.Migration)
 	var wg sync.WaitGroup
 
 	for k := range keys {
@@ -59,7 +66,7 @@ func (c localFSConverter) Convert(ctx context.Context, f filter) (Migrations, er
 		close(migrationsCh)
 	}()
 
-	var result Migrations
+	var result migration.Migrations
 
 	for {
 		select {
@@ -76,11 +83,7 @@ func (c localFSConverter) Convert(ctx context.Context, f filter) (Migrations, er
 	}
 }
 
-func filterMigrations(m Migrations, f filter) Migrations {
-	return m
-}
-
-func (c localFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]int, error) {
+func (c *LocalFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]int, error) {
 	files, err := ioutil.ReadDir(c.folder)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not read keys from folder %s", c.folder)
@@ -115,17 +118,8 @@ func (c localFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]in
 	return keys, nil
 }
 
-func inStringSlice(key string, keys []string) bool {
-	for i := range keys {
-		if keys[i] == key {
-			return true
-		}
-	}
-	return false
-}
-
-func (c localFSConverter) readOne(key string) (Migration, error) {
-	var result Migration
+func (c *LocalFSConverter) readOne(key string) (migration.Migration, error) {
+	var result migration.Migration
 
 	up := filepath.Join(c.folder, key+defaultUpExtension)
 	down := filepath.Join(c.folder, key+defaultDownExtension)
@@ -157,8 +151,8 @@ func (c localFSConverter) readOne(key string) (Migration, error) {
 	}
 
 	result.Key = key
-	result.Name = extractNameFromKey(key, nameRegexp) // fixme: no error
-	result.Version, err = extractVersionFromKey(key, versionRegexp)
+	result.Name = c.extractNameFromKey(key)
+	result.Version, err = c.extractVersionFromKey(key)
 	if err != nil {
 		return result, err
 	}
@@ -166,8 +160,8 @@ func (c localFSConverter) readOne(key string) (Migration, error) {
 	return result, nil
 }
 
-func extractVersionFromKey(key string, r *regexp.Regexp) (string, error) {
-	matches := r.FindStringSubmatch(key)
+func (c *LocalFSConverter) extractVersionFromKey(key string) (string, error) {
+	matches := c.versionRegexp.FindStringSubmatch(key)
 	if len(matches) < 2 {
 		return "", ErrInvalidTimestamp
 	}
@@ -175,8 +169,8 @@ func extractVersionFromKey(key string, r *regexp.Regexp) (string, error) {
 	return matches[1], nil
 }
 
-func extractNameFromKey(key string, r *regexp.Regexp) string {
-	matches := r.FindStringSubmatch(key)
+func (c *LocalFSConverter) extractNameFromKey(key string) string {
+	matches := c.nameRegexp.FindStringSubmatch(key)
 	if len(matches) < 2 {
 		return ""
 	}
@@ -198,16 +192,4 @@ func convertLocalFilePathToKey(path string) (string, error) {
 	}
 
 	return segments[0], nil
-}
-
-func ucFirst(s string) string {
-	r := []rune(s)
-
-	if len(r) == 0 {
-		return ""
-	}
-
-	f := string(unicode.ToUpper(r[0]))
-
-	return f + string(r[1:])
 }

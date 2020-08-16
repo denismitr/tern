@@ -1,4 +1,4 @@
-package tern
+package migration
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -44,3 +44,5 @@ func Test_MigrationsCanBeSortedByVersion(t *testing.T) {
 	assert.Equal(t, migrations[2].Name, m1.Name)
 	assert.Equal(t, migrations[3].Name, m3.Name)
 }
+
+

@@ -2,6 +2,8 @@ package tern
 
 import (
 	"context"
+	"github.com/denismitr/tern/database"
+	"github.com/denismitr/tern/migration"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -44,12 +46,14 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 3)
 
-		gateway, err := newMysqlGateway(db, DefaultMigrationsTable, mysqlDefaultLockKey, mysqlDefaultLockSeconds)
+		gateway, err := database.Create(db, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		versions, err := gateway.readVersions(ctx)
+		defer gateway.Close()
+
+		versions, err := gateway.ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -62,7 +66,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
-		tables, err := gateway.showTables(ctx)
+		tables, err := gateway.ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
@@ -76,14 +80,14 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		}
 
 		// expect migrations table to be clean
-		versionsAfterDown, err := gateway.readVersions(ctx)
+		versionsAfterDown, err := gateway.ReadVersions(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
 
 		assert.Len(t, versionsAfterDown, 0)
 
-		if err := gateway.dropMigrationsTable(ctx); err != nil {
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -92,19 +96,25 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		gateway, err := newMysqlGateway(db, DefaultMigrationsTable, mysqlDefaultLockKey, mysqlDefaultLockSeconds)
+		gateway, err := database.Create(db, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// given we already have a migrations table
-		if err := gateway.createMigrationsTable(ctx); err != nil {
+		if err := gateway.CreateMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
 		// given we have already migrated these 2 migrations
-		existingMigrations := []string{"1596897167_create_foo_table", "1596897188_create_bar_table"}
-		if err := gateway.writeVersions(ctx, existingMigrations); err != nil {
+		existingMigrations := migration.Migrations(
+			[]migration.Migration{
+				{Key: "1596897167_create_foo_table", Name: "Create foo table", Version: "1596897167"},
+				{Key: "1596897188_create_bar_table", Name: "Create bar table", Version: "1596897188"},
+			},
+		)
+
+		if err := gateway.WriteVersions(ctx, existingMigrations); err != nil {
 			t.Fatal(err)
 		}
 
@@ -115,7 +125,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
-		versions, err := gateway.readVersions(ctx)
+		versions, err := gateway.ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -128,7 +138,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
-		tables, err := gateway.showTables(ctx)
+		tables, err := gateway.ShowTables(ctx)
 		assert.NoError(t, err)
 
 		assert.Len(t, tables, 2)
@@ -139,14 +149,14 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		versionsAfterDown, err := gateway.readVersions(ctx)
+		versionsAfterDown, err := gateway.ReadVersions(ctx)
 		assert.NoError(t, err)
 
 		// expect no versions in migrations table
 		assert.Len(t, versionsAfterDown, 0)
 
 		// DO: clean up
-		if err := gateway.dropMigrationsTable(ctx); err != nil {
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -155,24 +165,28 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		gateway, err := newMysqlGateway(db, DefaultMigrationsTable, mysqlDefaultLockKey, mysqlDefaultLockSeconds)
+		gateway, err := database.Create(db, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
 
+		defer gateway.Close()
+
 		// given we already have a migrations table
-		if err := gateway.createMigrationsTable(ctx); err != nil {
+		if err := gateway.CreateMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
 		// given we have already migrated these 2 migrations
-		existingMigrations := []string{
-			"1596897167_create_foo_table",
-			"1596897188_create_bar_table",
-			"1597897177_create_baz_table",
-		}
+		existingMigrations := migration.Migrations(
+			[]migration.Migration{
+				{Key: "1596897167_create_foo_table", Name: "Create foo table", Version: "1596897167"},
+				{Key: "1596897188_create_bar_table", Name: "Create bar table", Version: "1596897188"},
+				{Key: "1597897177_create_bar_table", Name: "Create baz table", Version: "1597897177"},
+			},
+		)
 
-		if err := gateway.writeVersions(ctx, existingMigrations); err != nil {
+		if err := gateway.WriteVersions(ctx, existingMigrations); err != nil {
 			t.Fatal(err)
 		}
 
@@ -183,7 +197,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 0)
 
-		versions, err := gateway.readVersions(ctx)
+		versions, err := gateway.ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,7 +210,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
-		tables, err := gateway.showTables(ctx)
+		tables, err := gateway.ShowTables(ctx)
 		assert.NoError(t, err)
 
 		assert.Len(t, tables, 1)
@@ -207,14 +221,14 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		versionsAfterDown, err := gateway.readVersions(ctx)
+		versionsAfterDown, err := gateway.ReadVersions(ctx)
 		assert.NoError(t, err)
 
 		// expect no versions in migrations table
 		assert.Len(t, versionsAfterDown, 0)
 
 		// DO: clean up
-		if err := gateway.dropMigrationsTable(ctx); err != nil {
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -230,12 +244,14 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
-		gateway, err := newMysqlGateway(db, DefaultMigrationsTable, mysqlDefaultLockKey, mysqlDefaultLockSeconds)
+		gateway, err := database.Create(db, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		versions, err := gateway.readVersions(ctx)
+		defer gateway.Close()
+
+		versions, err := gateway.ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -246,13 +262,13 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
-		tables, err := gateway.showTables(ctx)
+		tables, err := gateway.ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
 
 		assert.Len(t, tables, 2)
-		assert.Equal(t, []string{"foo", DefaultMigrationsTable}, tables)
+		assert.Equal(t, []string{"foo", database.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
 		if err := m.Down(ctx); err != nil {
@@ -260,7 +276,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		}
 
 		// DO: clean up
-		if err := gateway.dropMigrationsTable(ctx); err != nil {
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})

@@ -16,7 +16,9 @@ func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
 	m := new(Migrator)
 
 	for _, oFunc := range opts {
-		oFunc(m, db)
+		if err := oFunc(m, db); err != nil {
+			return nil, err
+		}
 	}
 
 	// Default converter implementation

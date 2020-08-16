@@ -76,8 +76,10 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
 
 		// DO: lets bring it down
-		if err := m.Down(ctx); err != nil {
+		if executed ,err := m.Down(ctx); err != nil {
 			assert.NoError(t, err)
+		} else {
+			assert.Len(t, executed, 3)
 		}
 
 		// expect migrations table to be clean
@@ -147,8 +149,10 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"baz", "migrations"}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if err := m.Down(ctx); err != nil {
+		if executed, err := m.Down(ctx); err != nil {
 			assert.NoError(t, err)
+		} else {
+			assert.Len(t, executed, 3)
 		}
 
 		versionsAfterDown, err := gateway.ReadVersions(ctx)
@@ -220,8 +224,10 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"migrations"}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if err := m.Down(ctx); err != nil {
+		if executed, err := m.Down(ctx); err != nil {
 			assert.NoError(t, err)
+		} else {
+			assert.Len(t, executed, 3)
 		}
 
 		versionsAfterDown, err := gateway.ReadVersions(ctx)
@@ -276,8 +282,10 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"foo", database.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if err := m.Down(ctx); err != nil {
+		if executed, err := m.Down(ctx); err != nil {
 			assert.NoError(t, err)
+		} else {
+			assert.Len(t, executed, 1)
 		}
 
 		// DO: clean up
@@ -324,8 +332,10 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"bar", database.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if err := m.Down(ctx); err != nil {
+		if executed, err := m.Down(ctx); err != nil {
 			assert.NoError(t, err)
+		} else {
+			assert.Len(t, executed, 1)
 		}
 
 		// DO: clean up

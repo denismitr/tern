@@ -27,7 +27,7 @@ type Gateway interface {
 	io.Closer
 
 	Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
-	Down(ctx context.Context, migrations migration.Migrations, p Plan) error
+	Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
 }
 
 func CreateGateway(db *sqlx.DB, migrationsTable string) (Gateway, error) {

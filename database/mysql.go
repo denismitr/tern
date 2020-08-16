@@ -117,43 +117,50 @@ func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan)
 	return migrated, tx.Commit()
 }
 
-func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) error { //fixme: return list of keys
+func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	if err := g.locker.lock(ctx, g.conn); err != nil {
-		return errors.Wrap(err, "down migrations lock failed")
+		return nil, errors.Wrap(err, "down migrations lock failed")
 	}
 
 	defer func() {
 		if err := g.locker.unlock(ctx, g.conn); err != nil {
-			panic(err)
+			panic(err) // fixme
 		}
 	}()
 
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	versions, err := readVersions(tx, g.migrationsTable)
 	if err != nil {
 		_ = tx.Rollback()
-		return err
+		return nil, err
 	}
 
 	deleteVersionQuery := g.createDeleteVersionQuery()
 
+	var executed migration.Migrations
 	for i := range migrations {
 		if inVersions(migrations[i].Version, versions) {
 			if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
 				if rollbackErr := tx.Rollback(); rollbackErr != nil {
-					return errors.Wrap(err, rollbackErr.Error())
+					return nil, errors.Wrap(err, rollbackErr.Error())
 				}
 
-				return err
+				return nil, err
 			}
+
+			executed = append(executed, migrations[i])
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, errors.Wrap(err, "could not commit the down migration execution")
+	}
+
+	return executed, nil
 }
 
 func (g *MySQL) ReadVersions(ctx context.Context) ([]string, error) {

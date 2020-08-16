@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/denismitr/tern/converter"
 	"github.com/denismitr/tern/database"
+	"github.com/denismitr/tern/migration"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
@@ -64,7 +65,7 @@ func (m *Migrator) Up(ctx context.Context, cfs ...ActionConfigurator) ([]string,
 	return migrated.Keys(), nil
 }
 
-func (m *Migrator) Down(ctx context.Context, cfs ...ActionConfigurator) error {
+func (m *Migrator) Down(ctx context.Context, cfs ...ActionConfigurator) (migration.Migrations, error) {
 	act := new(action)
 	for _, f := range cfs {
 		f(act)
@@ -72,14 +73,15 @@ func (m *Migrator) Down(ctx context.Context, cfs ...ActionConfigurator) error {
 
 	migrations, err := m.converter.Convert(ctx, converter.Filter{})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := m.gateway.Down(ctx, migrations, database.Plan{Steps: act.steps}); err != nil {
-		return err
+	executed, err := m.gateway.Down(ctx, migrations, database.Plan{Steps: act.steps});
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	return executed, nil
 }
 
 func (m *Migrator) Close() error {

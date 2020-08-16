@@ -63,9 +63,7 @@ func (g *MySQL) Close() error {
 }
 
 func (g *MySQL) Lock(ctx context.Context) error {
-	query := fmt.Sprintf("SELECT GET_LOCK('%s', %d)", g.lockKey, g.lockFor)
-
-	if _, err := g.conn.ExecContext(ctx, query); err != nil {
+	if _, err := g.conn.ExecContext(ctx, "SELECT GET_LOCK(?, ?)", g.lockKey, g.lockFor); err != nil {
 		return errors.Wrapf(err, "could not obtain [%s] exclusive MySQL DB lock for [%d] seconds", g.lockKey, g.lockFor)
 	}
 
@@ -73,9 +71,7 @@ func (g *MySQL) Lock(ctx context.Context) error {
 }
 
 func (g *MySQL) Unlock(ctx context.Context) error {
-	query := fmt.Sprintf("SELECT RELEASE_ALL_LOCKS();") // fixme
-
-	if _, err := g.conn.ExecContext(ctx, query); err != nil {
+	if _, err := g.conn.ExecContext(ctx, "SELECT RELEASE_LOCK(?)", g.lockKey); err != nil {
 		return errors.Wrapf(err, "could not release [%s] exclusive MySQL DB lock", g.lockKey)
 	}
 

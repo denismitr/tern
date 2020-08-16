@@ -38,6 +38,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
 		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
 		assert.NoError(t, err)
+		defer m.Close()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
@@ -120,6 +121,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
 		assert.NoError(t, err)
+		defer m.Close()
 
 		keys, err := m.Up(ctx)
 		assert.NoError(t, err)
@@ -192,6 +194,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
 		assert.NoError(t, err)
+		defer m.Close()
 
 		keys, err := m.Up(ctx)
 		assert.NoError(t, err)
@@ -237,6 +240,8 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 
+		defer m.Close()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
@@ -269,6 +274,54 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		assert.Len(t, tables, 2)
 		assert.Equal(t, []string{"foo", database.DefaultMigrationsTable}, tables)
+
+		// DO: execute down migrations to rollback all of them
+		if err := m.Down(ctx); err != nil {
+			assert.NoError(t, err)
+		}
+
+		// DO: clean up
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("it_can_migrate_a_single_file", func(t *testing.T) {
+		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+		assert.NoError(t, err)
+
+		defer m.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		defer cancel()
+
+		keys, err := m.Up(ctx, WithKeys("1596897188_create_bar_table"))
+		assert.NoError(t, err)
+		assert.Len(t, keys, 1)
+
+		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		defer gateway.Close()
+
+		versions, err := gateway.ReadVersions(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// expect 3 versions in migrations table
+		assert.Len(t, versions, 1)
+		assert.Equal(t, "1596897188", versions[0])
+
+		tables, err := gateway.ShowTables(ctx)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+
+		assert.Len(t, tables, 2)
+		assert.Equal(t, []string{"bar", database.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
 		if err := m.Down(ctx); err != nil {

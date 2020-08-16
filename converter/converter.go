@@ -15,7 +15,7 @@ const defaultUpExtension = ".up.sql"
 const defaultDownExtension = ".down.sql"
 
 type Filter struct {
-	keys  []string
+	Keys  []string
 }
 
 type Converter interface {
@@ -39,6 +39,10 @@ func ucFirst(s string) string {
 }
 
 func inStringSlice(key string, keys []string) bool {
+	if keys == nil {
+		return false
+	}
+
 	for i := range keys {
 		if keys[i] == key {
 			return true

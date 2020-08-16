@@ -40,7 +40,7 @@ func NewLocalFSConverter(folder string) (*LocalFSConverter, error) {
 }
 
 func (c *LocalFSConverter) Convert(ctx context.Context, f Filter) (migration.Migrations, error) {
-	keys, err := c.getAllKeysFromFolder(f.keys)
+	keys, err := c.getAllKeysFromFolder(f.Keys)
 	if err != nil {
 		return nil, err
 	}

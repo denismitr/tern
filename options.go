@@ -34,6 +34,7 @@ func WithMysqlConfig(migrationsTable, lockKey string, lockFor int) OptionFunc {
 
 type action struct {
 	steps int
+	keys []string
 }
 
 type ActionConfigurator func (a *action)
@@ -41,5 +42,11 @@ type ActionConfigurator func (a *action)
 func WithSteps(steps int) ActionConfigurator {
 	return func (a *action) {
 		a.steps = steps
+	}
+}
+
+func WithKeys(keys ...string) ActionConfigurator {
+	return func (a *action) {
+		a.keys = keys
 	}
 }

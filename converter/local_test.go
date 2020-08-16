@@ -73,7 +73,7 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
 		defer cancel()
 
-		migrations, err := c.Convert(ctx, Filter{keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
+		migrations, err := c.Convert(ctx, Filter{Keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
 
 		assert.NoError(t, err)
 		assert.Len(t, migrations, 2)

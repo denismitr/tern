@@ -5,7 +5,10 @@ import (
 	"github.com/denismitr/tern/converter"
 	"github.com/denismitr/tern/database"
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
+
+var ErrGatewayNotInitialized = errors.New("database gateway has not been initialized")
 
 type Migrator struct {
 	gateway   database.Gateway
@@ -47,7 +50,7 @@ func (m *Migrator) Up(ctx context.Context, cfs ...ActionConfigurator) ([]string,
 		f(act)
 	}
 
-	migrations, err := m.converter.Convert(ctx, converter.Filter{})
+	migrations, err := m.converter.Convert(ctx, converter.Filter{Keys: act.keys})
 	if err != nil {
 		return nil, err
 	}
@@ -77,4 +80,12 @@ func (m *Migrator) Down(ctx context.Context, cfs ...ActionConfigurator) error {
 	}
 
 	return nil
+}
+
+func (m *Migrator) Close() error {
+	if m.gateway == nil {
+		return ErrGatewayNotInitialized
+	}
+
+	return m.gateway.Close()
 }

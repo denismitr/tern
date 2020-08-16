@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"github.com/denismitr/tern/migration"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
@@ -49,4 +50,32 @@ func CreateServiceGateway(db *sqlx.DB, migrationsTable string) (ServiceGateway, 
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
+}
+
+func up(ctx context.Context, tx *sql.Tx, migration migration.Migration, insertQuery string) error {
+	if _, err := tx.ExecContext(ctx, migration.Up); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version, migration.Name); err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func down(ctx context.Context, tx *sql.Tx, migration migration.Migration, removeVersionQuery string) error {
+	if _, err := tx.ExecContext(ctx, migration.Down); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, removeVersionQuery, migration.Version); err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return err
+		}
+	}
+
+	return nil
 }

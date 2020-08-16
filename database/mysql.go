@@ -103,16 +103,12 @@ func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan)
 
 	var migrated migration.Migrations
 	for i := range scheduled {
-		if _, err := tx.ExecContext(ctx, scheduled[i].Up); err != nil {
+		if err := up(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
 			if rollbackErr := tx.Rollback(); rollbackErr != nil {
 				return nil, errors.Wrap(err, rollbackErr.Error())
 			}
-		}
 
-		if _, err := tx.ExecContext(ctx, insertVersionQuery, scheduled[i].Version, scheduled[i].Name); err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				return nil, errors.Wrap(err, rollbackErr.Error())
-			}
+			return nil, err
 		}
 
 		migrated = append(migrated, scheduled[i])
@@ -121,7 +117,7 @@ func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan)
 	return migrated, tx.Commit()
 }
 
-func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) error {
+func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) error { //fixme: return list of keys
 	if err := g.locker.lock(ctx, g.conn); err != nil {
 		return errors.Wrap(err, "down migrations lock failed")
 	}
@@ -147,16 +143,12 @@ func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Pla
 
 	for i := range migrations {
 		if inVersions(migrations[i].Version, versions) {
-			if _, err := tx.ExecContext(ctx, migrations[i].Down); err != nil {
+			if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
 				if rollbackErr := tx.Rollback(); rollbackErr != nil {
 					return errors.Wrap(err, rollbackErr.Error())
 				}
-			}
 
-			if _, err := tx.ExecContext(ctx, deleteVersionQuery, migrations[i].Version); err != nil {
-				if rollbackErr := tx.Rollback(); rollbackErr != nil {
-					return errors.Wrap(err, rollbackErr.Error())
-				}
+				return err
 			}
 		}
 	}

@@ -1,16 +1,16 @@
-package tern
+package converter
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-const defaultMysqlStubs = "./stubs/valid/mysql"
+const defaultMysqlStubs = "./stubs"
 
 func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 	folder, err := filepath.Abs(defaultMysqlStubs)
@@ -18,9 +18,10 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := localFSConverter{folder: folder}
-	key := "1596897167_create_foo_table"
+	c, err := NewLocalFSConverter(folder)
+	assert.NoError(t, err)
 
+	key := "1596897167_create_foo_table"
 
 	m, err := c.readOne(key)
 
@@ -32,18 +33,19 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 }
 
 func Test_ConvertLocalFolder(t *testing.T) {
+	folder, err := filepath.Abs(defaultMysqlStubs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := NewLocalFSConverter(folder)
+	assert.NoError(t, err)
+
 	t.Run("all migrations can be read from local folder", func(t *testing.T) {
-		folder, err := filepath.Abs(defaultMysqlStubs)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		c := localFSConverter{folder: folder}
-
 		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
 		defer cancel()
 
-		migrations, err := c.Convert(ctx, filter{})
+		migrations, err := c.Convert(ctx, Filter{})
 
 		assert.NoError(t, err)
 		assert.Len(t, migrations, 3)
@@ -68,17 +70,10 @@ func Test_ConvertLocalFolder(t *testing.T) {
 	})
 
 	t.Run("specified migrations can be read from local folder", func(t *testing.T) {
-		folder, err := filepath.Abs(defaultMysqlStubs)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		c := localFSConverter{folder: folder}
-
 		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
 		defer cancel()
 
-		migrations, err := c.Convert(ctx, filter{keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
+		migrations, err := c.Convert(ctx, Filter{keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
 
 		assert.NoError(t, err)
 		assert.Len(t, migrations, 2)
@@ -119,9 +114,17 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		{in: "1253656456566_foo", err:  ErrInvalidTimestamp},
 	}
 
+	folder, err := filepath.Abs(defaultMysqlStubs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := NewLocalFSConverter(folder)
+	assert.NoError(t, err)
+
 	for _, tc := range valid {
 		t.Run(fmt.Sprintf("valid-timestanps-%s", tc.in), func(t *testing.T) {
-			out, err := extractVersionFromKey(tc.in, versionRegexp)
+			out, err := c.extractVersionFromKey(tc.in)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.out, out)
 		})
@@ -129,7 +132,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 
 	for _, tc := range invalid {
 		t.Run(fmt.Sprintf("invalid-timestanps-%s", tc.in), func(t *testing.T) {
-			out, err := extractVersionFromKey(tc.in, versionRegexp)
+			out, err := c.extractVersionFromKey(tc.in)
 			assert.Error(t, err)
 			assert.True(t, errors.Is(tc.err, err))
 			assert.Equal(t, "", out)
@@ -150,9 +153,17 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 		{in: "14968971672", out: ""},
 	}
 
+	folder, err := filepath.Abs(defaultMysqlStubs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := NewLocalFSConverter(folder)
+	assert.NoError(t, err)
+
 	for _, tc := range tt {
 		t.Run(fmt.Sprintf("valid-timestanps-%s", tc.in), func(t *testing.T) {
-			out := extractNameFromKey(tc.in, nameRegexp)
+			out := c.extractNameFromKey(tc.in)
 			assert.Equal(t, tc.out, out)
 		})
 	}
@@ -198,4 +209,3 @@ func Test_ConvertPathToKey(t *testing.T) {
 		})
 	}
 }
-

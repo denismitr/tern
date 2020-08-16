@@ -1,23 +1,34 @@
 package tern
 
-import "github.com/jmoiron/sqlx"
+import (
+	"github.com/jmoiron/sqlx"
+	"github.com/denismitr/tern/converter"
+	"github.com/denismitr/tern/database"
+)
 
-type OptionFunc func(m *Migrator, db *sqlx.DB)
+type OptionFunc func(m *Migrator, db *sqlx.DB) error
 
 func UseLocalFolder(folder string) OptionFunc {
-	return func(m *Migrator, _ *sqlx.DB) {
-		m.converter = localFSConverter{folder: folder}
+	return func(m *Migrator, _ *sqlx.DB) error {
+		conv, err := converter.NewLocalFSConverter(folder)
+		if err != nil {
+			return err
+		}
+
+		m.converter = conv
+		return nil
 	}
 }
 
 func WithMysqlConfig(migrationsTable, lockKey string, lockFor int) OptionFunc {
-	return func(m *Migrator, db *sqlx.DB) {
-		m.ex = &mysqlGateway{
-			db: db,
-			migrationsTable: migrationsTable,
-			lockFor: lockFor,
-			lockKey: lockKey,
+	return func(m *Migrator, db *sqlx.DB) error {
+		gateway, err := database.NewMysqlGateway(db, migrationsTable, lockKey, lockFor)
+		if err != nil {
+			return err
 		}
+
+		m.gateway = gateway
+		return nil
 	}
 }
 

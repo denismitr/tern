@@ -54,6 +54,7 @@ type MySQL struct {
 	locker          locker
 }
 
+// Close the connection
 func (g *MySQL) Close() error {
 	if g.conn != nil {
 		return g.conn.Close()
@@ -63,8 +64,107 @@ func (g *MySQL) Close() error {
 }
 
 func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
+	var migrated migration.Migrations
+
+	if err := g.execUnderLock(ctx, "migrate", func(tx *sql.Tx, versions []string) error {
+		insertVersionQuery := g.createInsertVersionsQuery()
+
+		var scheduled migration.Migrations
+		for i := range migrations {
+			if !inVersions(migrations[i].Version, versions) {
+				if p.Steps != 0 && len(scheduled) >= p.Steps {
+					break
+				}
+
+				scheduled = append(scheduled, migrations[i])
+			}
+		}
+
+		if len(scheduled) == 0 {
+			return ErrNothingToMigrate
+		}
+
+		for i := range scheduled {
+			if err := up(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
+				return err
+			}
+
+			migrated = append(migrated, scheduled[i])
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return migrated, nil
+}
+
+func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
+	var executed migration.Migrations
+
+	if err := g.execUnderLock(ctx, "rollback", func(tx *sql.Tx, versions []string) error {
+		deleteVersionQuery := g.createDeleteVersionQuery()
+
+		for i := range migrations {
+			if inVersions(migrations[i].Version, versions) {
+				if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
+					return err
+				}
+
+				executed = append(executed, migrations[i])
+			}
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return executed, nil
+}
+
+func (g *MySQL) Refresh(
+	ctx context.Context,
+	migrations migration.Migrations,
+	plan Plan,
+) (migration.Migrations, migration.Migrations, error) {
+	var rolledBack migration.Migrations
+	var migrated migration.Migrations
+
+	if err := g.execUnderLock(ctx, "refresh", func(tx *sql.Tx, versions []string) error {
+		deleteVersionQuery := g.createDeleteVersionQuery()
+		insertVersionQuery := g.createInsertVersionsQuery()
+
+		for i := range migrations {
+			if inVersions(migrations[i].Version, versions) {
+				if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
+					return err
+				}
+
+				rolledBack = append(rolledBack, migrations[i])
+			}
+		}
+
+		for i := range migrations {
+			if err := up(ctx, tx, migrations[i], insertVersionQuery); err != nil {
+				return err
+			}
+
+			migrated = append(migrated, migrations[i])
+		}
+
+		return nil
+	}); err != nil {
+		return nil, nil, err
+	}
+
+	return rolledBack, migrated, nil
+}
+
+func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []string) error) error {
 	if err := g.locker.lock(ctx, g.conn); err != nil {
-		return nil, errors.Wrap(err, "migrations up lock failed")
+		return errors.Wrap(err, "down migrations lock failed")
 	}
 
 	defer func() {
@@ -74,93 +174,35 @@ func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan)
 	}()
 
 	if err := g.CreateMigrationsTable(ctx); err != nil {
-		return nil, err
+		return err
 	}
 
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
-		return nil, err
+		return errors.Wrapf(err, "could not start transaction to execute [%s] operation", operation)
 	}
 
-	versions, err := readVersions(tx, g.migrationsTable)
+	availableVersions, err := readVersions(tx, g.migrationsTable)
 	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-
-	insertVersionQuery := g.createInsertVersionsQuery()
-
-	var scheduled migration.Migrations
-	for i := range migrations {
-		if !inVersions(migrations[i].Version, versions) {
-			if p.Steps != 0 && len(scheduled) >= p.Steps {
-				break
-			}
-
-			scheduled = append(scheduled, migrations[i])
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return errors.Wrapf(err, "operation [%s] failed: %s", operation, rollbackErr.Error())
 		}
+		return err
 	}
 
-	var migrated migration.Migrations
-	for i := range scheduled {
-		if err := up(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				return nil, errors.Wrap(err, rollbackErr.Error())
-			}
-
-			return nil, err
+	if err := f(tx, availableVersions); err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return errors.Wrapf(err, "operation [%s] failed: %s", operation, rollbackErr.Error())
 		}
 
-		migrated = append(migrated, scheduled[i])
-	}
-
-	return migrated, tx.Commit()
-}
-
-func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
-	if err := g.locker.lock(ctx, g.conn); err != nil {
-		return nil, errors.Wrap(err, "down migrations lock failed")
-	}
-
-	defer func() {
-		if err := g.locker.unlock(ctx, g.conn); err != nil {
-			panic(err) // fixme
-		}
-	}()
-
-	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	versions, err := readVersions(tx, g.migrationsTable)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-
-	deleteVersionQuery := g.createDeleteVersionQuery()
-
-	var executed migration.Migrations
-	for i := range migrations {
-		if inVersions(migrations[i].Version, versions) {
-			if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
-				if rollbackErr := tx.Rollback(); rollbackErr != nil {
-					return nil, errors.Wrap(err, rollbackErr.Error())
-				}
-
-				return nil, err
-			}
-
-			executed = append(executed, migrations[i])
-		}
+		return errors.Wrapf(err, "operation [%s] failed", operation)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, errors.Wrap(err, "could not commit the down migration execution")
+		return errors.Wrapf(err, "could not commit [%s] operation]", operation)
 	}
 
-	return executed, nil
+	return nil
 }
 
 func (g *MySQL) ReadVersions(ctx context.Context) ([]string, error) {

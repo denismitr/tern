@@ -7,6 +7,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -35,24 +36,33 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 	defer db.Close()
 
+	gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer gateway.Close()
+
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
 		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 		defer m.Close()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
 		defer cancel()
 
-		keys, err := m.Up(ctx)
-		assert.NoError(t, err)
-		assert.Len(t, keys, 3)
-
-		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
-		if err != nil {
+		// DO: clean up
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
-		defer gateway.Close()
+		keys, err := m.Up(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{
+			"1596897167_create_foo_table",
+			"1596897188_create_bar_table",
+			"1597897177_create_baz_table",
+		}, keys)
 
 		versions, err := gateway.ReadVersions(ctx)
 		if err != nil {
@@ -76,7 +86,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
 
 		// DO: lets bring it down
-		if executed ,err := m.Down(ctx); err != nil {
+		if executed, err := m.Down(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, executed, 3)
@@ -98,11 +108,6 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	t.Run("it_will_skip_migrations_that_are_already_in_migrations_table", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
-
-		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
-		if err != nil {
-			t.Fatal(err)
-		}
 
 		// given we already have a migrations table
 		if err := gateway.CreateMigrationsTable(ctx); err != nil {
@@ -171,12 +176,9 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
-		if err != nil {
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
-
-		defer gateway.Close()
 
 		// given we already have a migrations table
 		if err := gateway.CreateMigrationsTable(ctx); err != nil {
@@ -201,7 +203,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		defer m.Close()
 
 		keys, err := m.Up(ctx)
-		assert.NoError(t, err)
+		assert.True(t, errors.Is(err, database.ErrNothingToMigrate))
 		assert.Len(t, keys, 0)
 
 		versions, err := gateway.ReadVersions(ctx)
@@ -336,6 +338,66 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, executed, 1)
+		}
+
+		// DO: clean up
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("it_can_refresh_all_migrations", func(t *testing.T) {
+		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+		assert.NoError(t, err)
+
+		defer m.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		defer cancel()
+
+		_, err = m.Up(ctx)
+		assert.NoError(t, err)
+		//assert.Len(t, keys, 3)
+
+		rolledBack, migrated, err := m.Refresh(ctx)
+		assert.NoError(t, err)
+		assert.Len(t, rolledBack, 3)
+		assert.Len(t, migrated, 3)
+
+
+		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		defer gateway.Close()
+
+		versions, err := gateway.ReadVersions(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Len(t, versions, 3)
+
+		assert.Equal(t, "1596897167", versions[0])
+		assert.Equal(t, "1596897188", versions[1])
+		assert.Equal(t, "1597897177", versions[2])
+
+		// expect 4 tables to exist still in the DB
+		// migrations table and 3 tables created by scripts
+		tables, err := gateway.ShowTables(ctx)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+
+		assert.Len(t, tables, 4)
+		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
+
+		// DO: execute down migrations to rollback all of them
+		if executed, err := m.Down(ctx); err != nil {
+			assert.NoError(t, err)
+		} else {
+			assert.Len(t, executed, 3)
 		}
 
 		// DO: clean up

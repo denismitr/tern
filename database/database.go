@@ -12,6 +12,11 @@ import (
 )
 
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
+var ErrNothingToMigrate = errors.New("nothing to migrate")
+
+type executor interface {
+	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+}
 
 type ServiceGateway interface {
 	io.Closer
@@ -28,6 +33,7 @@ type Gateway interface {
 
 	Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
 	Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
+	Refresh(ctx context.Context, migrations migration.Migrations, plan Plan) (migration.Migrations, migration.Migrations, error)
 }
 
 func CreateGateway(db *sqlx.DB, migrationsTable string) (Gateway, error) {

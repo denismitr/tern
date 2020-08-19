@@ -160,13 +160,16 @@ func (c *LocalFSConverter) readOne(key string) (migration.Migration, error) {
 	return result, nil
 }
 
-func (c *LocalFSConverter) extractVersionFromKey(key string) (string, error) {
+func (c *LocalFSConverter) extractVersionFromKey(key string) (migration.Version, error) {
+	var result migration.Version
 	matches := c.versionRegexp.FindStringSubmatch(key)
 	if len(matches) < 2 {
-		return "", ErrInvalidTimestamp
+		return result, ErrInvalidTimestamp
 	}
 
-	return matches[1], nil
+	result.Timestamp = matches[1]
+
+	return result, nil
 }
 
 func (c *LocalFSConverter) extractNameFromKey(key string) string {

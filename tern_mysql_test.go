@@ -117,8 +117,8 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		// given we have already migrated these 2 migrations
 		existingMigrations := migration.Migrations(
 			[]migration.Migration{
-				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: "1596897167"},
-				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: "1596897188"},
+				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: migration.Version{Timestamp: "1596897167"}},
+				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: migration.Version{Timestamp:"1596897188"}},
 			},
 		)
 
@@ -188,9 +188,9 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		// given we have already migrated these 2 migrations
 		existingMigrations := migration.Migrations(
 			[]migration.Migration{
-				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: "1596897167"},
-				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: "1596897188"},
-				{Key: "1597897177_create_bar_table", Name: "CreateGateway baz table", Version: "1597897177"},
+				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: migration.Version{Timestamp:"1596897167"}},
+				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: migration.Version{Timestamp:"1596897188"}},
+				{Key: "1597897177_create_bar_table", Name: "CreateGateway baz table", Version: migration.Version{Timestamp:"1597897177"}},
 			},
 		)
 

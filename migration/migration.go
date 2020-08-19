@@ -4,29 +4,21 @@ import (
 	"github.com/pkg/errors"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 )
 
 var ErrInvalidTimestamp = errors.New("invalid timestamp in migration filename")
-var versionRegexp *regexp.Regexp
-var nameRegexp *regexp.Regexp
 
-func init() {
-	var err error
-	versionRegexp, err = regexp.Compile(`^(?P<version>\d{1,12})(_\w+)?$`)
-	if err != nil {
-		panic(err)
-	}
-	nameRegexp, err = regexp.Compile(`^\d{1,12}_(?P<name>\w+[\w_-]+)?$`)
-	if err != nil {
-		panic(err)
-	}
+type Version struct {
+	Timestamp string
+	CreatedAt time.Time
 }
 
 type Migration struct {
 	Key     string
 	Name    string
-	Version string
+	Version Version
 	Up      string
 	Down    string
 }
@@ -45,7 +37,7 @@ func (m Migrations) Len() int {
 }
 
 func (m Migrations) Less(i, j int) bool {
-	return m[i].Version < m[j].Version
+	return m[i].Version.Timestamp < m[j].Version.Timestamp
 }
 
 func (m Migrations) Swap(i, j int) {

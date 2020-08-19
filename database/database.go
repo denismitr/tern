@@ -9,22 +9,16 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"io"
-	"time"
 )
 
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
 var ErrNothingToMigrate = errors.New("nothing to migrate")
 
-type Version struct {
-	Timestamp string
-	CreatedAt time.Time
-}
-
 type ServiceGateway interface {
 	io.Closer
 
 	WriteVersions(ctx context.Context, migrations migration.Migrations) error
-	ReadVersions(ctx context.Context) ([]Version, error)
+	ReadVersions(ctx context.Context) ([]migration.Version, error)
 	ShowTables(ctx context.Context) ([]string, error)
 	DropMigrationsTable(ctx context.Context) error
 	CreateMigrationsTable(ctx context.Context) error
@@ -62,13 +56,16 @@ func CreateServiceGateway(db *sqlx.DB, migrationsTable string) (ServiceGateway, 
 
 func up(ctx context.Context, tx *sql.Tx, migration migration.Migration, insertQuery string) error {
 	if _, err := tx.ExecContext(ctx, migration.Up); err != nil {
-		return err
+		return errors.Wrapf(err, "could not execute up migration [%s]", migration.Key)
 	}
 
-	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version, migration.Name); err != nil {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return err
-		}
+	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version.Timestamp, migration.Name); err != nil {
+		return errors.Wrapf(
+			err,
+			"could not insert migration version with key [%s] with query %s",
+			migration.Key,
+			insertQuery,
+		)
 	}
 
 	return nil
@@ -76,13 +73,16 @@ func up(ctx context.Context, tx *sql.Tx, migration migration.Migration, insertQu
 
 func down(ctx context.Context, tx *sql.Tx, migration migration.Migration, removeVersionQuery string) error {
 	if _, err := tx.ExecContext(ctx, migration.Down); err != nil {
-		return err
+		return errors.Wrapf(err, "could not execute down migration %s", migration.Key)
 	}
 
-	if _, err := tx.ExecContext(ctx, removeVersionQuery, migration.Version); err != nil {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return err
-		}
+	if _, err := tx.ExecContext(ctx, removeVersionQuery, migration.Version.Timestamp); err != nil {
+		return errors.Wrapf(
+			err,
+			"could not remove migration version [%s] with query [%s]",
+			migration.Version.Timestamp,
+			removeVersionQuery,
+		)
 	}
 
 	return nil

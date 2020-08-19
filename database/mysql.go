@@ -67,7 +67,7 @@ func (g *MySQL) Close() error {
 func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	var migrated migration.Migrations
 
-	if err := g.execUnderLock(ctx, "migrate", func(tx *sql.Tx, versions []Version) error {
+	if err := g.execUnderLock(ctx, "migrate", func(tx *sql.Tx, versions []migration.Version) error {
 		insertVersionQuery := g.createInsertVersionsQuery()
 
 		var scheduled migration.Migrations
@@ -104,7 +104,7 @@ func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan)
 func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	var executed migration.Migrations
 
-	if err := g.execUnderLock(ctx, "rollback", func(tx *sql.Tx, versions []Version) error {
+	if err := g.execUnderLock(ctx, "rollback", func(tx *sql.Tx, versions []migration.Version) error {
 		deleteVersionQuery := g.createDeleteVersionQuery()
 
 		for i := range migrations {
@@ -133,7 +133,7 @@ func (g *MySQL) Refresh(
 	var rolledBack migration.Migrations
 	var migrated migration.Migrations
 
-	if err := g.execUnderLock(ctx, "refresh", func(tx *sql.Tx, versions []Version) error {
+	if err := g.execUnderLock(ctx, "refresh", func(tx *sql.Tx, versions []migration.Version) error {
 		deleteVersionQuery := g.createDeleteVersionQuery()
 		insertVersionQuery := g.createInsertVersionsQuery()
 
@@ -163,14 +163,14 @@ func (g *MySQL) Refresh(
 	return rolledBack, migrated, nil
 }
 
-func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []Version) error) (err error) {
+func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []migration.Version) error) error {
 	if err := g.locker.lock(ctx, g.conn); err != nil {
-		return errors.Wrap(err, "down migrations lock failed")
+		return errors.Wrap(err, "mysql lock failed")
 	}
 
 	defer func() {
 		if unlockErr := g.locker.unlock(ctx, g.conn); unlockErr != nil {
-			err = unlockErr
+			panic(unlockErr) // fixme
 		}
 	}()
 
@@ -206,7 +206,7 @@ func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql
 	return nil
 }
 
-func (g *MySQL) ReadVersions(ctx context.Context) ([]Version, error) {
+func (g *MySQL) ReadVersions(ctx context.Context) ([]migration.Version, error) {
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -276,10 +276,10 @@ func (g *MySQL) WriteVersions(ctx context.Context, migrations migration.Migratio
 
 	for i := range migrations {
 		name := migrations[i].Name
-		version := migrations[i].Version
-		if _, err := g.conn.ExecContext(ctx, query, version, name); err != nil {
+		timestamp := migrations[i].Version.Timestamp
+		if _, err := g.conn.ExecContext(ctx, query, timestamp, name); err != nil {
 			_ = tx.Rollback()
-			return errors.Wrapf(err, "could not insert migration with version [%s] and name [%s] to [%s] table", version, name, g.migrationsTable)
+			return errors.Wrapf(err, "could not insert migration with version [%s] and name [%s] to [%s] table", timestamp, name, g.migrationsTable)
 		}
 	}
 
@@ -305,13 +305,13 @@ func (g *MySQL) ShowTables(ctx context.Context) ([]string, error) {
 	return result, err
 }
 
-func readVersions(tx *sql.Tx, migrationsTable string) ([]Version, error) {
+func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, error) {
 	rows, err := tx.Query(fmt.Sprintf("SELECT version, created_at FROM %s", migrationsTable))
 	if err != nil {
 		return nil, err
 	}
 
-	var result []Version
+	var result []migration.Version
 
 	for rows.Next() {
 		var timestamp string
@@ -320,15 +320,15 @@ func readVersions(tx *sql.Tx, migrationsTable string) ([]Version, error) {
 			rows.Close()
 			return result, err
 		}
-		result = append(result, Version{Timestamp: timestamp, CreatedAt: createdAt})
+		result = append(result, migration.Version{Timestamp: timestamp, CreatedAt: createdAt})
 	}
 
 	return result, nil
 }
 
-func inVersions(version string, versions []Version) bool {
+func inVersions(version migration.Version, versions []migration.Version) bool {
 	for _, v := range versions {
-		if v.Timestamp == version {
+		if v.Timestamp == version.Timestamp {
 			return true
 		}
 	}

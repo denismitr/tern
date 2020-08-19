@@ -7,6 +7,7 @@ import (
 	"github.com/denismitr/tern/migration"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
+	"time"
 )
 
 const mysqlCreateMigrationsSchema = `
@@ -66,7 +67,7 @@ func (g *MySQL) Close() error {
 func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	var migrated migration.Migrations
 
-	if err := g.execUnderLock(ctx, "migrate", func(tx *sql.Tx, versions []string) error {
+	if err := g.execUnderLock(ctx, "migrate", func(tx *sql.Tx, versions []Version) error {
 		insertVersionQuery := g.createInsertVersionsQuery()
 
 		var scheduled migration.Migrations
@@ -103,7 +104,7 @@ func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan)
 func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	var executed migration.Migrations
 
-	if err := g.execUnderLock(ctx, "rollback", func(tx *sql.Tx, versions []string) error {
+	if err := g.execUnderLock(ctx, "rollback", func(tx *sql.Tx, versions []Version) error {
 		deleteVersionQuery := g.createDeleteVersionQuery()
 
 		for i := range migrations {
@@ -132,7 +133,7 @@ func (g *MySQL) Refresh(
 	var rolledBack migration.Migrations
 	var migrated migration.Migrations
 
-	if err := g.execUnderLock(ctx, "refresh", func(tx *sql.Tx, versions []string) error {
+	if err := g.execUnderLock(ctx, "refresh", func(tx *sql.Tx, versions []Version) error {
 		deleteVersionQuery := g.createDeleteVersionQuery()
 		insertVersionQuery := g.createInsertVersionsQuery()
 
@@ -162,14 +163,14 @@ func (g *MySQL) Refresh(
 	return rolledBack, migrated, nil
 }
 
-func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []string) error) error {
+func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []Version) error) (err error) {
 	if err := g.locker.lock(ctx, g.conn); err != nil {
 		return errors.Wrap(err, "down migrations lock failed")
 	}
 
 	defer func() {
-		if err := g.locker.unlock(ctx, g.conn); err != nil {
-			panic(err) // fixme
+		if unlockErr := g.locker.unlock(ctx, g.conn); unlockErr != nil {
+			err = unlockErr
 		}
 	}()
 
@@ -205,7 +206,7 @@ func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql
 	return nil
 }
 
-func (g *MySQL) ReadVersions(ctx context.Context) ([]string, error) {
+func (g *MySQL) ReadVersions(ctx context.Context) ([]Version, error) {
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -304,29 +305,30 @@ func (g *MySQL) ShowTables(ctx context.Context) ([]string, error) {
 	return result, err
 }
 
-func readVersions(tx *sql.Tx, migrationsTable string) ([]string, error) {
-	rows, err := tx.Query(fmt.Sprintf("SELECT version FROM %s", migrationsTable))
+func readVersions(tx *sql.Tx, migrationsTable string) ([]Version, error) {
+	rows, err := tx.Query(fmt.Sprintf("SELECT version, created_at FROM %s", migrationsTable))
 	if err != nil {
 		return nil, err
 	}
 
-	var result []string
+	var result []Version
 
 	for rows.Next() {
-		var version string
-		if err := rows.Scan(&version); err != nil {
+		var timestamp string
+		var createdAt time.Time
+		if err := rows.Scan(&timestamp, &createdAt); err != nil {
 			rows.Close()
 			return result, err
 		}
-		result = append(result, version)
+		result = append(result, Version{Timestamp: timestamp, CreatedAt: createdAt})
 	}
 
 	return result, nil
 }
 
-func inVersions(version string, versions []string) bool {
+func inVersions(version string, versions []Version) bool {
 	for _, v := range versions {
-		if v == version {
+		if v.Timestamp == version {
 			return true
 		}
 	}

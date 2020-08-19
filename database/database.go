@@ -9,20 +9,22 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"io"
+	"time"
 )
 
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
 var ErrNothingToMigrate = errors.New("nothing to migrate")
 
-type executor interface {
-	ExecContext(context.Context, string, ...interface{}) (sql.Result, error)
+type Version struct {
+	Timestamp string
+	CreatedAt time.Time
 }
 
 type ServiceGateway interface {
 	io.Closer
 
 	WriteVersions(ctx context.Context, migrations migration.Migrations) error
-	ReadVersions(ctx context.Context) ([]string, error)
+	ReadVersions(ctx context.Context) ([]Version, error)
 	ShowTables(ctx context.Context) ([]string, error)
 	DropMigrationsTable(ctx context.Context) error
 	CreateMigrationsTable(ctx context.Context) error

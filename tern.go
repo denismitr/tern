@@ -91,3 +91,22 @@ func (m *Migrator) Close() error {
 
 	return m.gateway.Close()
 }
+
+func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migration.Migrations, migration.Migrations, error) {
+	act := new(action)
+	for _, f := range cfs {
+		f(act)
+	}
+
+	migrations, err := m.converter.Convert(ctx, converter.Filter{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{});
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return rolledBack, migrated, nil
+}

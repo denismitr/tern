@@ -7,6 +7,7 @@ import (
 	"github.com/denismitr/tern/migration"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
+	"time"
 )
 
 const mysqlCreateMigrationsSchema = `
@@ -54,6 +55,7 @@ type MySQL struct {
 	locker          locker
 }
 
+// Close the connection
 func (g *MySQL) Close() error {
 	if g.conn != nil {
 		return g.conn.Close()
@@ -63,107 +65,148 @@ func (g *MySQL) Close() error {
 }
 
 func (g *MySQL) Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
-	if err := g.locker.lock(ctx, g.conn); err != nil {
-		return nil, errors.Wrap(err, "migrations up lock failed")
-	}
-
-	defer func() {
-		if err := g.locker.unlock(ctx, g.conn); err != nil {
-			panic(err) // fixme
-		}
-	}()
-
-	if err := g.CreateMigrationsTable(ctx); err != nil {
-		return nil, err
-	}
-
-	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	versions, err := readVersions(tx, g.migrationsTable)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-
-	insertVersionQuery := g.createInsertVersionsQuery()
-
-	var scheduled migration.Migrations
-	for i := range migrations {
-		if !inVersions(migrations[i].Version, versions) {
-			if p.Steps != 0 && len(scheduled) >= p.Steps {
-				break
-			}
-
-			scheduled = append(scheduled, migrations[i])
-		}
-	}
-
 	var migrated migration.Migrations
-	for i := range scheduled {
-		if err := up(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				return nil, errors.Wrap(err, rollbackErr.Error())
-			}
 
-			return nil, err
+	if err := g.execUnderLock(ctx, "migrate", func(tx *sql.Tx, versions []migration.Version) error {
+		insertVersionQuery := g.createInsertVersionsQuery()
+
+		var scheduled migration.Migrations
+		for i := range migrations {
+			if !inVersions(migrations[i].Version, versions) {
+				if p.Steps != 0 && len(scheduled) >= p.Steps {
+					break
+				}
+
+				scheduled = append(scheduled, migrations[i])
+			}
 		}
 
-		migrated = append(migrated, scheduled[i])
+		if len(scheduled) == 0 {
+			return ErrNothingToMigrate
+		}
+
+		for i := range scheduled {
+			if err := up(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
+				return err
+			}
+
+			migrated = append(migrated, scheduled[i])
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
-	return migrated, tx.Commit()
+	return migrated, nil
 }
 
 func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
-	if err := g.locker.lock(ctx, g.conn); err != nil {
-		return nil, errors.Wrap(err, "down migrations lock failed")
-	}
-
-	defer func() {
-		if err := g.locker.unlock(ctx, g.conn); err != nil {
-			panic(err) // fixme
-		}
-	}()
-
-	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	versions, err := readVersions(tx, g.migrationsTable)
-	if err != nil {
-		_ = tx.Rollback()
-		return nil, err
-	}
-
-	deleteVersionQuery := g.createDeleteVersionQuery()
-
 	var executed migration.Migrations
-	for i := range migrations {
-		if inVersions(migrations[i].Version, versions) {
-			if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
-				if rollbackErr := tx.Rollback(); rollbackErr != nil {
-					return nil, errors.Wrap(err, rollbackErr.Error())
+
+	if err := g.execUnderLock(ctx, "rollback", func(tx *sql.Tx, versions []migration.Version) error {
+		deleteVersionQuery := g.createDeleteVersionQuery()
+
+		for i := range migrations {
+			if inVersions(migrations[i].Version, versions) {
+				if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
+					return err
 				}
 
-				return nil, err
+				executed = append(executed, migrations[i])
 			}
-
-			executed = append(executed, migrations[i])
 		}
-	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, errors.Wrap(err, "could not commit the down migration execution")
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return executed, nil
 }
 
-func (g *MySQL) ReadVersions(ctx context.Context) ([]string, error) {
+func (g *MySQL) Refresh(
+	ctx context.Context,
+	migrations migration.Migrations,
+	plan Plan,
+) (migration.Migrations, migration.Migrations, error) {
+	var rolledBack migration.Migrations
+	var migrated migration.Migrations
+
+	if err := g.execUnderLock(ctx, "refresh", func(tx *sql.Tx, versions []migration.Version) error {
+		deleteVersionQuery := g.createDeleteVersionQuery()
+		insertVersionQuery := g.createInsertVersionsQuery()
+
+		for i := range migrations {
+			if inVersions(migrations[i].Version, versions) {
+				if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
+					return err
+				}
+
+				rolledBack = append(rolledBack, migrations[i])
+			}
+		}
+
+		for i := range migrations {
+			if err := up(ctx, tx, migrations[i], insertVersionQuery); err != nil {
+				return err
+			}
+
+			migrated = append(migrated, migrations[i])
+		}
+
+		return nil
+	}); err != nil {
+		return nil, nil, err
+	}
+
+	return rolledBack, migrated, nil
+}
+
+func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []migration.Version) error) error {
+	if err := g.locker.lock(ctx, g.conn); err != nil {
+		return errors.Wrap(err, "mysql lock failed")
+	}
+
+	defer func() {
+		if unlockErr := g.locker.unlock(ctx, g.conn); unlockErr != nil {
+			panic(unlockErr) // fixme
+		}
+	}()
+
+	if err := g.CreateMigrationsTable(ctx); err != nil {
+		return err
+	}
+
+	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "could not start transaction to execute [%s] operation", operation)
+	}
+
+	availableVersions, err := readVersions(tx, g.migrationsTable)
+	if err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return errors.Wrapf(err, "operation [%s] failed: %s", operation, rollbackErr.Error())
+		}
+		return err
+	}
+
+	if err := f(tx, availableVersions); err != nil {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return errors.Wrapf(err, "operation [%s] failed: %s", operation, rollbackErr.Error())
+		}
+
+		return errors.Wrapf(err, "operation [%s] failed", operation)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return errors.Wrapf(err, "could not commit [%s] operation]", operation)
+	}
+
+	return nil
+}
+
+func (g *MySQL) ReadVersions(ctx context.Context) ([]migration.Version, error) {
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -233,10 +276,10 @@ func (g *MySQL) WriteVersions(ctx context.Context, migrations migration.Migratio
 
 	for i := range migrations {
 		name := migrations[i].Name
-		version := migrations[i].Version
-		if _, err := g.conn.ExecContext(ctx, query, version, name); err != nil {
+		timestamp := migrations[i].Version.Timestamp
+		if _, err := g.conn.ExecContext(ctx, query, timestamp, name); err != nil {
 			_ = tx.Rollback()
-			return errors.Wrapf(err, "could not insert migration with version [%s] and name [%s] to [%s] table", version, name, g.migrationsTable)
+			return errors.Wrapf(err, "could not insert migration with version [%s] and name [%s] to [%s] table", timestamp, name, g.migrationsTable)
 		}
 	}
 
@@ -262,29 +305,30 @@ func (g *MySQL) ShowTables(ctx context.Context) ([]string, error) {
 	return result, err
 }
 
-func readVersions(tx *sql.Tx, migrationsTable string) ([]string, error) {
-	rows, err := tx.Query(fmt.Sprintf("SELECT version FROM %s", migrationsTable))
+func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, error) {
+	rows, err := tx.Query(fmt.Sprintf("SELECT version, created_at FROM %s", migrationsTable))
 	if err != nil {
 		return nil, err
 	}
 
-	var result []string
+	var result []migration.Version
 
 	for rows.Next() {
-		var version string
-		if err := rows.Scan(&version); err != nil {
+		var timestamp string
+		var createdAt time.Time
+		if err := rows.Scan(&timestamp, &createdAt); err != nil {
 			rows.Close()
 			return result, err
 		}
-		result = append(result, version)
+		result = append(result, migration.Version{Timestamp: timestamp, CreatedAt: createdAt})
 	}
 
 	return result, nil
 }
 
-func inVersions(version string, versions []string) bool {
+func inVersions(version migration.Version, versions []migration.Version) bool {
 	for _, v := range versions {
-		if v == version {
+		if v.Timestamp == version.Timestamp {
 			return true
 		}
 	}

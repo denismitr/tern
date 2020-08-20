@@ -44,7 +44,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	defer gateway.Close()
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
-		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -126,7 +126,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -198,7 +198,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -245,7 +245,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("run_single_migration_when_step_is_one", func(t *testing.T) {
-		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -297,7 +297,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_migrate_a_single_file", func(t *testing.T) {
-		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -347,7 +347,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_refresh_all_migrations", func(t *testing.T) {
-		m, err := NewMigrator(db, UseLocalFolder("./stubs/valid/mysql"))
+		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 
 		defer m.Close()

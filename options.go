@@ -8,7 +8,7 @@ import (
 
 type OptionFunc func(m *Migrator, db *sqlx.DB) error
 
-func UseLocalFolder(folder string) OptionFunc {
+func UseLocalFolderSource(folder string) OptionFunc {
 	return func(m *Migrator, _ *sqlx.DB) error {
 		conv, err := converter.NewLocalFSConverter(folder)
 		if err != nil {

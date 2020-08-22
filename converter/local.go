@@ -132,38 +132,29 @@ func (c *LocalFSConverter) readOne(key string) (migration.Migration, error) {
 
 	fUp, err := os.Open(up)
 	if err != nil {
-		return result, err
+		return migration.Migration{}, err
 	}
 
 	defer fUp.Close()
 
 	fDown, err := os.Open(down)
 	if err != nil {
-		return result, err
+		return migration.Migration{}, err
 	}
 
 	defer fDown.Close()
 
-	if upContents, err := ioutil.ReadAll(fUp); err != nil {
-		return result, err
-	} else {
-		result.Migrate = append(result.Migrate, string(upContents))
+	migrateContents, err := ioutil.ReadAll(fUp);
+	if err != nil {
+		return migration.Migration{}, err
 	}
 
-	if downContents, err := ioutil.ReadAll(fDown); err != nil {
-		return result, err
-	} else {
-		result.Rollback = append(result.Rollback, string(downContents))
-	}
-
-	result.Key = key
-	result.Name = c.extractNameFromKey(key)
-	result.Version, err = c.extractVersionFromKey(key)
+	rollbackContents, err := ioutil.ReadAll(fDown);
 	if err != nil {
 		return result, err
 	}
 
-	return result, nil
+	return migration.NewMigrationFromFile(key, migrateContents, rollbackContents, c.nameRegexp, c.versionRegexp)
 }
 
 func (c *LocalFSConverter) extractVersionFromKey(key string) (migration.Version, error) {

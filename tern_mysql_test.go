@@ -433,27 +433,24 @@ func TestInMemorySourceMigrations(t *testing.T) {
 
 	t.Run("it can migrate and rollback all the in memory migrations", func(t *testing.T) {
 		source := UseInMemorySource(
-			migration.Migration{
-				Key:      "1596897167_create_foo_table",
-				Name:     "Create foo table",
-				Version:  migration.Version{Timestamp: "1596897167"},
-				Migrate:  []string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"},
-				Rollback: []string{"DROP TABLE IF EXISTS foo;"},
-			},
-			migration.Migration{
-				Key:      "1596897188_create_bar_table",
-				Name:     "Create bar table",
-				Version:  migration.Version{Timestamp: "1596897188"},
-				Migrate:  []string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"},
-				Rollback: []string{"DROP TABLE IF EXISTS bar;"},
-			},
-			migration.Migration{
-				Key:      "1597897177_create_baz_table",
-				Name:     "Create baz table",
-				Version:  migration.Version{Timestamp: "1597897177"},
-				Migrate:  []string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"},
-				Rollback: []string{"DROP TABLE IF EXISTS baz;"},
-			},
+			migration.New(
+				"1596897167",
+				"Create foo table",
+				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				[]string{"DROP TABLE IF EXISTS foo;"},
+			),
+			migration.New(
+				"1596897188",
+				"Create bar table",
+				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				[]string{"DROP TABLE IF EXISTS bar;"},
+			),
+			migration.New(
+				"1597897177",
+				"Create baz table",
+				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"},
+				[]string{"DROP TABLE IF EXISTS baz;"},
+			),
 		)
 
 		m, err := NewMigrator(db.DriverName(), db.DB, source)

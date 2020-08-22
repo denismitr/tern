@@ -24,6 +24,52 @@ type Migration struct {
 	Rollback []string
 }
 
+func NewMigrationFromDB(timestamp string, createdAt time.Time, name string) Migration {
+	return Migration{
+		Key:  createKeyFromTimestampAndName(timestamp, name),
+		Name: name,
+		Version: Version{
+			Timestamp: timestamp,
+			CreatedAt: createdAt,
+		},
+	}
+}
+
+func NewMigrationFromFile(
+	key string,
+	migrate []byte,
+	rollback []byte,
+	nReg *regexp.Regexp,
+	vReg *regexp.Regexp,
+) (Migration, error) {
+	timestamp, err := ExtractVersionFromKey(key, vReg)
+	if err != nil {
+		return Migration{}, nil // fixme
+	}
+
+	return Migration{
+		Key:  key,
+		Name: ExtractNameFromKey(key, nReg),
+		Version: Version{
+			Timestamp: timestamp,
+		},
+		Migrate: []string{string(migrate)},
+		Rollback: []string{string(rollback)},
+	}, nil
+}
+
+func New(timestamp, name string, migrate, rollback []string) Migration {
+	return Migration{
+		Key:  createKeyFromTimestampAndName(timestamp, name),
+		Name: name,
+		Version: Version{
+			Timestamp: timestamp,
+		},
+		Migrate: migrate,
+		Rollback: rollback,
+	}
+}
+
 func (m *Migration) MigrateScripts() string {
 	var ms bytes.Buffer
 
@@ -79,6 +125,14 @@ func (m Migrations) Less(i, j int) bool {
 
 func (m Migrations) Swap(i, j int) {
 	m[i], m[j] = m[j], m[i]
+}
+
+func createKeyFromTimestampAndName(timestamp, name string) string {
+	var result bytes.Buffer
+	result.WriteString(timestamp)
+	result.WriteString("_")
+	result.WriteString(strings.Replace(strings.ToLower(name), " ", "_", -1))
+	return result.String()
 }
 
 func ExtractVersionFromKey(key string, r *regexp.Regexp) (string, error) {

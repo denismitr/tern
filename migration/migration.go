@@ -17,21 +17,25 @@ type Version struct {
 }
 
 type Migration struct {
-	Key     string
-	Name    string
-	Version Version
-	Up      []string
-	Down    []string
+	Key      string
+	Name     string
+	Version  Version
+	Migrate  []string
+	Rollback []string
 }
 
 func (m *Migration) MigrateScripts() string {
 	var ms bytes.Buffer
 
-	for i := range m.Up {
-		ms.WriteString(m.Up[i])
+	for i := range m.Migrate {
+		ms.WriteString(m.Migrate[i])
 
-		if !strings.HasSuffix(m.Up[i], ";") {
+		if !strings.HasSuffix(m.Migrate[i], ";") {
 			ms.WriteString(";")
+		}
+
+		if i < len(m.Migrate)-1 {
+			ms.WriteString("\n")
 		}
 	}
 
@@ -41,18 +45,20 @@ func (m *Migration) MigrateScripts() string {
 func (m *Migration) RollbackScripts() string {
 	var ms bytes.Buffer
 
-	for i := range m.Down {
-		ms.WriteString(m.Down[i])
+	for i := range m.Rollback {
+		ms.WriteString(m.Rollback[i])
 
-		if !strings.HasSuffix(m.Down[i], ";") {
+		if !strings.HasSuffix(m.Rollback[i], ";") {
 			ms.WriteString(";")
+		}
+
+		if i < len(m.Rollback)-1 {
+			ms.WriteString("\n")
 		}
 	}
 
 	return ms.String()
 }
-
-
 
 type Migrations []Migration
 

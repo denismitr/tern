@@ -86,10 +86,13 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
 
 		// DO: lets bring it down
-		if executed, err := m.Down(ctx); err != nil {
+		if rolledBack, err := m.Down(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
-			assert.Len(t, executed, 3)
+			assert.Len(t, rolledBack, 3)
+			assert.Equal(t, "1597897177_create_baz_table", rolledBack[0].Key)
+			assert.Equal(t, "1596897188_create_bar_table", rolledBack[1].Key)
+			assert.Equal(t, "1596897167_create_foo_table", rolledBack[2].Key)
 		}
 
 		// expect migrations table to be clean
@@ -158,6 +161,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, executed, 3)
+			assert.Equal(t, executed[0].Key, "1597897177_create_baz_table")
 		}
 
 		versionsAfterDown, err := gateway.ReadVersions(ctx)
@@ -394,10 +398,13 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if executed, err := m.Down(ctx); err != nil {
+		if rolledBack, err := m.Down(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
-			assert.Len(t, executed, 3)
+			assert.Len(t, rolledBack, 3)
+			assert.Equal(t, "1597897177_create_baz_table", rolledBack[0].Key)
+			assert.Equal(t, "1596897188_create_bar_table", rolledBack[1].Key)
+			assert.Equal(t, "1596897167_create_foo_table", rolledBack[2].Key)
 		}
 
 		// DO: clean up

@@ -11,9 +11,6 @@ var ErrInvalidTimestamp = errors.New("invalid timestamp in migration filename")
 var ErrNotAMigrationFile = errors.New("not a migration file")
 var ErrTooManyFilesForKey = errors.New("too many files for single mysqlDefaultLockKey")
 
-const defaultUpExtension = ".up.sql"
-const defaultDownExtension = ".down.sql"
-
 type Filter struct {
 	Keys  []string
 }

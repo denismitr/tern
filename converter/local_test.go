@@ -174,10 +174,10 @@ func Test_ConvertPathToKey(t *testing.T) {
 		in string
 		out string
 	}{
-		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_bar_table.up.sql", out: "1596897188_create_bar_table"},
-		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.down.sql", out: "1596897188_create_foo_table"},
-		{in: "1596897188_create_foo_table.down.sql", out: "1596897188_create_foo_table"},
-		{in: "./1596897188_create_foo_table.down.sql", out: "1596897188_create_foo_table"},
+		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_bar_table.migrate.sql", out: "1596897188_create_bar_table"},
+		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.rollback.sql", out: "1596897188_create_foo_table"},
+		{in: "1596897188_create_foo_table.rollback.sql", out: "1596897188_create_foo_table"},
+		{in: "./1596897188_create_foo_table.rollback.sql", out: "1596897188_create_foo_table"},
 	}
 
 	invalid := []struct{
@@ -185,11 +185,11 @@ func Test_ConvertPathToKey(t *testing.T) {
 		err error
 	}{
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_bar_table.sql", err: ErrNotAMigrationFile},
-		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.down", err: ErrNotAMigrationFile},
+		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.rollback", err: ErrNotAMigrationFile},
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table", err: ErrNotAMigrationFile},
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.foo", err: ErrNotAMigrationFile},
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.", err: ErrNotAMigrationFile},
-		{in: ".1596897188_create_foo_table.up.sql", err: ErrNotAMigrationFile},
+		{in: ".1596897188_create_foo_table.migrate.sql", err: ErrNotAMigrationFile},
 	}
 
 	for _, tc := range valid {

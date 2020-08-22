@@ -16,6 +16,12 @@ import (
 
 const DefaultMigrationsFolder = "./migrations"
 
+const defaultSqlExtension = "sql"
+const migrateFileSuffix = "migrate"
+const rollbackFileSuffix = "rollback"
+const defaultMigrateFileFullExtension = ".migrate.sql"
+const defaultRollbackFileFullExtension = ".rollback.sql"
+
 type LocalFSConverter struct {
 	folder string
 	versionRegexp *regexp.Regexp
@@ -121,8 +127,8 @@ func (c *LocalFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]i
 func (c *LocalFSConverter) readOne(key string) (migration.Migration, error) {
 	var result migration.Migration
 
-	up := filepath.Join(c.folder, key+defaultUpExtension)
-	down := filepath.Join(c.folder, key+defaultDownExtension)
+	up := filepath.Join(c.folder, key+defaultMigrateFileFullExtension)
+	down := filepath.Join(c.folder, key+defaultRollbackFileFullExtension)
 
 	fUp, err := os.Open(up)
 	if err != nil {
@@ -190,7 +196,7 @@ func convertLocalFilePathToKey(path string) (string, error) {
 		return "", ErrNotAMigrationFile
 	}
 
-	if segments[2] != "sql" || !(segments[1] == "up" || segments[1] == "down") {
+	if segments[2] != defaultSqlExtension || !(segments[1] == migrateFileSuffix || segments[1] == rollbackFileSuffix) {
 		return "", ErrNotAMigrationFile
 	}
 

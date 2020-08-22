@@ -1,15 +1,15 @@
 package tern
 
 import (
-	"github.com/jmoiron/sqlx"
+	"database/sql"
 	"github.com/denismitr/tern/converter"
 	"github.com/denismitr/tern/database"
 )
 
-type OptionFunc func(m *Migrator, db *sqlx.DB) error
+type OptionFunc func(m *Migrator, driver string, db *sql.DB) error
 
 func UseLocalFolderSource(folder string) OptionFunc {
-	return func(m *Migrator, _ *sqlx.DB) error {
+	return func(m *Migrator, _ string, _ *sql.DB) error {
 		conv, err := converter.NewLocalFSConverter(folder)
 		if err != nil {
 			return err
@@ -21,7 +21,7 @@ func UseLocalFolderSource(folder string) OptionFunc {
 }
 
 func WithMysqlConfig(migrationsTable, lockKey string, lockFor int) OptionFunc {
-	return func(m *Migrator, db *sqlx.DB) error {
+	return func(m *Migrator, driver string, db *sql.DB) error {
 		gateway, err := database.NewMysqlGateway(db, migrationsTable, lockKey, lockFor)
 		if err != nil {
 			return err

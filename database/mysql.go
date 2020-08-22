@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/denismitr/tern/migration"
-	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -49,7 +48,7 @@ func (g *mySQLLocker) unlock(ctx context.Context, conn *sql.Conn) error {
 }
 
 type MySQL struct {
-	db              *sqlx.DB
+	db              *sql.DB
 	conn            *sql.Conn
 	migrationsTable string
 	locker          locker
@@ -107,7 +106,7 @@ func (g *MySQL) Down(ctx context.Context, migrations migration.Migrations, p Pla
 	if err := g.execUnderLock(ctx, "rollback", func(tx *sql.Tx, versions []migration.Version) error {
 		deleteVersionQuery := g.createDeleteVersionQuery()
 
-		for i := range migrations {
+		for i := len(migrations) - 1; i >= 0; i--  {
 			if inVersions(migrations[i].Version, versions) {
 				if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
 					return err
@@ -137,7 +136,7 @@ func (g *MySQL) Refresh(
 		deleteVersionQuery := g.createDeleteVersionQuery()
 		insertVersionQuery := g.createInsertVersionsQuery()
 
-		for i := range migrations {
+		for i := len(migrations) - 1; i >= 0; i-- {
 			if inVersions(migrations[i].Version, versions) {
 				if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
 					return err
@@ -163,49 +162,6 @@ func (g *MySQL) Refresh(
 	return rolledBack, migrated, nil
 }
 
-func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []migration.Version) error) error {
-	if err := g.locker.lock(ctx, g.conn); err != nil {
-		return errors.Wrap(err, "mysql lock failed")
-	}
-
-	defer func() {
-		if unlockErr := g.locker.unlock(ctx, g.conn); unlockErr != nil {
-			panic(unlockErr) // fixme
-		}
-	}()
-
-	if err := g.CreateMigrationsTable(ctx); err != nil {
-		return err
-	}
-
-	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		return errors.Wrapf(err, "could not start transaction to execute [%s] operation", operation)
-	}
-
-	availableVersions, err := readVersions(tx, g.migrationsTable)
-	if err != nil {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return errors.Wrapf(err, "operation [%s] failed: %s", operation, rollbackErr.Error())
-		}
-		return err
-	}
-
-	if err := f(tx, availableVersions); err != nil {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return errors.Wrapf(err, "operation [%s] failed: %s", operation, rollbackErr.Error())
-		}
-
-		return errors.Wrapf(err, "operation [%s] failed", operation)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return errors.Wrapf(err, "could not commit [%s] operation]", operation)
-	}
-
-	return nil
-}
-
 func (g *MySQL) ReadVersions(ctx context.Context) ([]migration.Version, error) {
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
@@ -225,7 +181,7 @@ func (g *MySQL) ReadVersions(ctx context.Context) ([]migration.Version, error) {
 	return result, nil
 }
 
-func NewMysqlGateway(db *sqlx.DB, tableName, lockKey string, lockFor int) (*MySQL, error) {
+func NewMysqlGateway(db *sql.DB, tableName, lockKey string, lockFor int) (*MySQL, error) {
 	conn, err := db.Conn(context.Background()) // fixme
 	if err != nil {
 		return nil, errors.Wrap(err, "could not establish DB connection")
@@ -334,4 +290,54 @@ func inVersions(version migration.Version, versions []migration.Version) bool {
 	}
 
 	return false
+}
+
+func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []migration.Version) error) error {
+	if err := g.locker.lock(ctx, g.conn); err != nil {
+		return errors.Wrap(err, "mysql lock failed")
+	}
+
+	handleError := func(err error, tx *sql.Tx) error {
+		var rollbackErr error
+		var unlockErr error
+		var result = err
+
+		if tx != nil {
+			rollbackErr = tx.Rollback();
+			if rollbackErr != nil {
+				result = errors.Wrapf(result, rollbackErr.Error())
+			}
+		}
+
+		unlockErr = g.locker.unlock(ctx, g.conn);
+		if unlockErr != nil {
+			result = errors.Wrapf(result, unlockErr.Error())
+		}
+
+		return result
+	}
+
+	if err := g.CreateMigrationsTable(ctx); err != nil {
+		return handleError(err, nil)
+	}
+
+	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return handleError(errors.Wrapf(err, "could not start transaction to execute [%s] operation", operation), nil)
+	}
+
+	availableVersions, err := readVersions(tx, g.migrationsTable)
+	if err != nil {
+		return handleError(errors.Wrapf(err, "operation [%s] failed", operation), tx)
+	}
+
+	if err := f(tx, availableVersions); err != nil {
+		return handleError(errors.Wrapf(err, "operation [%s] failed", operation), tx)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return handleError(errors.Wrapf(err, "could not commit [%s] operation, rolled back", operation), tx)
+	}
+
+	return g.locker.unlock(ctx, g.conn)
 }

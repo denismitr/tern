@@ -3,10 +3,8 @@ package migration
 import (
 	"bytes"
 	"github.com/pkg/errors"
-	"regexp"
 	"strings"
 	"time"
-	"unicode"
 )
 
 var ErrInvalidTimestamp = errors.New("invalid timestamp in migration filename")
@@ -37,24 +35,17 @@ func NewMigrationFromDB(timestamp string, createdAt time.Time, name string) Migr
 
 func NewMigrationFromFile(
 	key string,
-	migrate []byte,
-	rollback []byte,
-	nReg *regexp.Regexp,
-	vReg *regexp.Regexp,
+	name string,
+	version Version,
+	migrate string,
+	rollback string,
 ) (Migration, error) {
-	timestamp, err := ExtractVersionFromKey(key, vReg)
-	if err != nil {
-		return Migration{}, nil // fixme
-	}
-
 	return Migration{
 		Key:  key,
-		Name: ExtractNameFromKey(key, nReg),
-		Version: Version{
-			Timestamp: timestamp,
-		},
-		Migrate: []string{string(migrate)},
-		Rollback: []string{string(rollback)},
+		Name: name,
+		Version: version,
+		Migrate: []string{migrate},
+		Rollback: []string{rollback},
 	}, nil
 }
 
@@ -133,34 +124,4 @@ func createKeyFromTimestampAndName(timestamp, name string) string {
 	result.WriteString("_")
 	result.WriteString(strings.Replace(strings.ToLower(name), " ", "_", -1))
 	return result.String()
-}
-
-func ExtractVersionFromKey(key string, r *regexp.Regexp) (string, error) {
-	matches := r.FindStringSubmatch(key)
-	if len(matches) < 2 {
-		return "", ErrInvalidTimestamp
-	}
-
-	return matches[1], nil
-}
-
-func ExtractNameFromKey(key string, r *regexp.Regexp) string {
-	matches := r.FindStringSubmatch(key)
-	if len(matches) < 2 {
-		return ""
-	}
-
-	return UcFirst(strings.Replace(matches[1], "_", " ", -1))
-}
-
-func UcFirst(s string) string {
-	r := []rune(s)
-
-	if len(r) == 0 {
-		return ""
-	}
-
-	f := string(unicode.ToUpper(r[0]))
-
-	return f + string(r[1:])
 }

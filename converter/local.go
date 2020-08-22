@@ -22,6 +22,8 @@ const rollbackFileSuffix = "rollback"
 const defaultMigrateFileFullExtension = ".migrate.sql"
 const defaultRollbackFileFullExtension = ".rollback.sql"
 
+type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
+
 type LocalFSConverter struct {
 	folder string
 	versionRegexp *regexp.Regexp
@@ -29,11 +31,7 @@ type LocalFSConverter struct {
 }
 
 func NewLocalFSConverter(folder string) (*LocalFSConverter, error) {
-	versionRegexp, err := regexp.Compile(`^(?P<version>\d{1,12})(_\w+)?$`)
-	if err != nil {
-		return nil, err
-	}
-	nameRegexp, err := regexp.Compile(`^\d{1,12}_(?P<name>\w+[\w_-]+)?$`)
+	versionRegexp, nameRegexp, err := LocalFSParsingRules()
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +41,19 @@ func NewLocalFSConverter(folder string) (*LocalFSConverter, error) {
 		versionRegexp: versionRegexp,
 		nameRegexp: nameRegexp,
 	}, nil
+}
+
+func LocalFSParsingRules() (*regexp.Regexp, *regexp.Regexp, error) {
+	versionRegexp, err := regexp.Compile(`^(?P<version>\d{1,12})(_\w+)?$`)
+	if err != nil {
+		return nil, nil, err
+	}
+	nameRegexp, err := regexp.Compile(`^\d{1,12}_(?P<name>\w+[\w_-]+)?$`)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return versionRegexp, nameRegexp, nil
 }
 
 func (c *LocalFSConverter) Convert(ctx context.Context, f Filter) (migration.Migrations, error) {
@@ -154,7 +165,17 @@ func (c *LocalFSConverter) readOne(key string) (migration.Migration, error) {
 		return result, err
 	}
 
-	return migration.NewMigrationFromFile(key, migrateContents, rollbackContents, c.nameRegexp, c.versionRegexp)
+	return c.createMigration(key, migrateContents, rollbackContents)
+}
+
+func (c *LocalFSConverter) createMigration(key string, migrateContents, rollbackContents []byte) (migration.Migration, error) {
+	name := c.extractNameFromKey(key)
+	version, err := c.extractVersionFromKey(key)
+	if err != nil {
+		return migration.Migration{}, err
+	}
+
+	return migration.NewMigrationFromFile(key, name, version, string(migrateContents), string(rollbackContents))
 }
 
 func (c *LocalFSConverter) extractVersionFromKey(key string) (migration.Version, error) {

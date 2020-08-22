@@ -53,7 +53,7 @@ func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (Se
 }
 
 func up(ctx context.Context, tx *sql.Tx, migration migration.Migration, insertQuery string) error {
-	if _, err := tx.ExecContext(ctx, migration.Up); err != nil {
+	if _, err := tx.ExecContext(ctx, migration.MigrateScripts()); err != nil {
 		return errors.Wrapf(err, "could not execute up migration [%s]", migration.Key)
 	}
 
@@ -70,7 +70,7 @@ func up(ctx context.Context, tx *sql.Tx, migration migration.Migration, insertQu
 }
 
 func down(ctx context.Context, tx *sql.Tx, migration migration.Migration, removeVersionQuery string) error {
-	if _, err := tx.ExecContext(ctx, migration.Down); err != nil {
+	if _, err := tx.ExecContext(ctx, migration.RollbackScripts()); err != nil {
 		return errors.Wrapf(err, "could not execute down migration %s", migration.Key)
 	}
 

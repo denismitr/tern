@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/denismitr/tern/converter"
 	"github.com/denismitr/tern/database"
+	"github.com/denismitr/tern/migration"
 )
 
 type OptionFunc func(m *Migrator, driver string, db *sql.DB) error
@@ -14,6 +15,15 @@ func UseLocalFolderSource(folder string) OptionFunc {
 		if err != nil {
 			return err
 		}
+
+		m.converter = conv
+		return nil
+	}
+}
+
+func UseInMemorySource(migrations ...migration.Migration) OptionFunc {
+	return func(m *Migrator, _ string, _ *sql.DB) error {
+		conv := converter.NewInMemoryConverter(migrations...)
 
 		m.converter = conv
 		return nil

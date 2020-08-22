@@ -147,13 +147,13 @@ func (c *LocalFSConverter) readOne(key string) (migration.Migration, error) {
 	if upContents, err := ioutil.ReadAll(fUp); err != nil {
 		return result, err
 	} else {
-		result.Up = string(upContents)
+		result.Up = append(result.Up, string(upContents))
 	}
 
 	if downContents, err := ioutil.ReadAll(fDown); err != nil {
 		return result, err
 	} else {
-		result.Down = string(downContents)
+		result.Down = append(result.Down, string(downContents))
 	}
 
 	result.Key = key

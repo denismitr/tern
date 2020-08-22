@@ -416,3 +416,110 @@ func Test_Tern_WithMySQL(t *testing.T) {
 }
 
 
+func TestInMemorySourceMigrations(t *testing.T) {
+	db, err := sqlx.Open("mysql", testConnection)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer db.Close()
+
+	gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer gateway.Close()
+
+	t.Run("it can migrate and rollback all the in memory migrations", func(t *testing.T) {
+		source := UseInMemorySource(
+			migration.Migration{
+				Key: "1596897167_create_foo_table",
+				Name: "Create foo table",
+				Version: migration.Version{Timestamp: "1596897167"},
+				Up: []string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				Down: []string{"DROP TABLE IF EXISTS foo;"},
+			},
+			migration.Migration{
+				Key: "1596897188_create_bar_table",
+				Name: "Create bar table",
+				Version: migration.Version{Timestamp: "1596897188"},
+				Up: []string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				Down: []string{"DROP TABLE IF EXISTS bar;"},
+			},
+			migration.Migration{
+				Key: "1597897177_create_baz_table",
+				Name: "Create baz table",
+				Version: migration.Version{Timestamp: "1597897177"},
+				Up: []string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"},
+				Down: []string{"DROP TABLE IF EXISTS baz;"},
+			},
+		)
+
+		m, err := NewMigrator(db.DriverName(), db.DB, source)
+		assert.NoError(t, err)
+
+		defer m.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		defer cancel()
+
+		// DO: clean up
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		keys, err := m.Migrate(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{
+			"1596897167_create_foo_table",
+			"1596897188_create_bar_table",
+			"1597897177_create_baz_table",
+		}, keys)
+
+		versions, err := gateway.ReadVersions(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Len(t, versions, 3)
+
+		assert.Equal(t, "1596897167", versions[0].Timestamp)
+		assert.Equal(t, "1596897188", versions[1].Timestamp)
+		assert.Equal(t, "1597897177", versions[2].Timestamp)
+
+		// expect 4 tables to exist now in the DB
+		// migrations table and 3 tables created by scripts
+		tables, err := gateway.ShowTables(ctx)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+
+		assert.Len(t, tables, 4)
+		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
+
+		// DO: lets bring it down
+		if rolledBack, err := m.Rollback(ctx); err != nil {
+			assert.NoError(t, err)
+		} else {
+			assert.Len(t, rolledBack, 3)
+			assert.Equal(t, "1597897177_create_baz_table", rolledBack[0].Key)
+			assert.Equal(t, "1596897188_create_bar_table", rolledBack[1].Key)
+			assert.Equal(t, "1596897167_create_foo_table", rolledBack[2].Key)
+		}
+
+		// expect migrations table to be clean
+		versionsAfterDown, err := gateway.ReadVersions(ctx)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+
+		assert.Len(t, versionsAfterDown, 0)
+
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+

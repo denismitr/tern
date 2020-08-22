@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"bytes"
 	"github.com/pkg/errors"
 	"regexp"
 	"strings"
@@ -19,9 +20,39 @@ type Migration struct {
 	Key     string
 	Name    string
 	Version Version
-	Up      string
-	Down    string
+	Up      []string
+	Down    []string
 }
+
+func (m *Migration) MigrateScripts() string {
+	var ms bytes.Buffer
+
+	for i := range m.Up {
+		ms.WriteString(m.Up[i])
+
+		if !strings.HasSuffix(m.Up[i], ";") {
+			ms.WriteString(";")
+		}
+	}
+
+	return ms.String()
+}
+
+func (m *Migration) RollbackScripts() string {
+	var ms bytes.Buffer
+
+	for i := range m.Down {
+		ms.WriteString(m.Down[i])
+
+		if !strings.HasSuffix(m.Down[i], ";") {
+			ms.WriteString(";")
+		}
+	}
+
+	return ms.String()
+}
+
+
 
 type Migrations []Migration
 

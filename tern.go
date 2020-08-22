@@ -2,10 +2,10 @@ package tern
 
 import (
 	"context"
+	"database/sql"
 	"github.com/denismitr/tern/converter"
 	"github.com/denismitr/tern/database"
 	"github.com/denismitr/tern/migration"
-	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
 
@@ -16,11 +16,11 @@ type Migrator struct {
 	converter converter.Converter
 }
 
-func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
+func NewMigrator(driver string, db *sql.DB, opts ...OptionFunc) (*Migrator, error) {
 	m := new(Migrator)
 
 	for _, oFunc := range opts {
-		if err := oFunc(m, db); err != nil {
+		if err := oFunc(m, driver, db); err != nil {
 			return nil, err
 		}
 	}
@@ -34,8 +34,9 @@ func NewMigrator(db *sqlx.DB, opts ...OptionFunc) (*Migrator, error) {
 		m.converter = localFsConverter
 	}
 
+	// Default gateway implementation
 	if m.gateway == nil {
-		gateway, err := database.CreateGateway(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateGateway(driver, db, database.DefaultMigrationsTable)
 		if err != nil {
 			return nil, err
 		}

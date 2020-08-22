@@ -23,7 +23,7 @@ func Test_MigratorCanBeInstantiated(t *testing.T) {
 
 	defer db.Close()
 
-	m, err := NewMigrator(db)
+	m, err := NewMigrator(db.DriverName(), db.DB)
 	assert.NoError(t, err)
 	assert.NotNil(t, m)
 }
@@ -36,7 +36,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 	defer db.Close()
 
-	gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
+	gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	defer gateway.Close()
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
-		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
+		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -129,7 +129,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
+		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -202,7 +202,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
+		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -249,7 +249,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("run_single_migration_when_step_is_one", func(t *testing.T) {
-		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
+		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -261,7 +261,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
-		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -301,7 +301,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_migrate_a_single_file", func(t *testing.T) {
-		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
+		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -313,7 +313,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
-		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -351,7 +351,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_refresh_all_migrations", func(t *testing.T) {
-		m, err := NewMigrator(db, UseLocalFolderSource("./stubs/valid/mysql"))
+		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource("./stubs/valid/mysql"))
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -369,7 +369,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Len(t, migrated, 3)
 
 
-		gateway, err := database.CreateServiceGateway(db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
 		if err != nil {
 			t.Fatal(err)
 		}

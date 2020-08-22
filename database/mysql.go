@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/denismitr/tern/migration"
-	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -49,7 +48,7 @@ func (g *mySQLLocker) unlock(ctx context.Context, conn *sql.Conn) error {
 }
 
 type MySQL struct {
-	db              *sqlx.DB
+	db              *sql.DB
 	conn            *sql.Conn
 	migrationsTable string
 	locker          locker
@@ -182,7 +181,7 @@ func (g *MySQL) ReadVersions(ctx context.Context) ([]migration.Version, error) {
 	return result, nil
 }
 
-func NewMysqlGateway(db *sqlx.DB, tableName, lockKey string, lockFor int) (*MySQL, error) {
+func NewMysqlGateway(db *sql.DB, tableName, lockKey string, lockFor int) (*MySQL, error) {
 	conn, err := db.Conn(context.Background()) // fixme
 	if err != nil {
 		return nil, errors.Wrap(err, "could not establish DB connection")

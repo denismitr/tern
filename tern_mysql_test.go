@@ -56,7 +56,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Up(ctx)
+		keys, err := m.Migrate(ctx)
 		assert.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
@@ -86,7 +86,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
 
 		// DO: lets bring it down
-		if rolledBack, err := m.Down(ctx); err != nil {
+		if rolledBack, err := m.Rollback(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, rolledBack, 3)
@@ -133,7 +133,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		defer m.Close()
 
-		keys, err := m.Up(ctx)
+		keys, err := m.Migrate(ctx)
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
@@ -157,7 +157,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"baz", "migrations"}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if executed, err := m.Down(ctx); err != nil {
+		if executed, err := m.Rollback(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, executed, 3)
@@ -206,7 +206,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.NoError(t, err)
 		defer m.Close()
 
-		keys, err := m.Up(ctx)
+		keys, err := m.Migrate(ctx)
 		assert.True(t, errors.Is(err, database.ErrNothingToMigrate))
 		assert.Len(t, keys, 0)
 
@@ -230,7 +230,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"migrations"}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if executed, err := m.Down(ctx); err != nil {
+		if executed, err := m.Rollback(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, executed, 3)
@@ -257,7 +257,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		keys, err := m.Up(ctx, WithSteps(1))
+		keys, err := m.Migrate(ctx, WithSteps(1))
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
@@ -288,7 +288,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"foo", database.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if executed, err := m.Down(ctx); err != nil {
+		if executed, err := m.Rollback(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, executed, 1)
@@ -309,7 +309,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		keys, err := m.Up(ctx, WithKeys("1596897188_create_bar_table"))
+		keys, err := m.Migrate(ctx, WithKeys("1596897188_create_bar_table"))
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
@@ -338,7 +338,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"bar", database.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if executed, err := m.Down(ctx); err != nil {
+		if executed, err := m.Rollback(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, executed, 1)
@@ -359,7 +359,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		_, err = m.Up(ctx)
+		_, err = m.Migrate(ctx)
 		assert.NoError(t, err)
 		//assert.Len(t, keys, 3)
 
@@ -398,7 +398,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
 
 		// DO: execute down migrations to rollback all of them
-		if rolledBack, err := m.Down(ctx); err != nil {
+		if rolledBack, err := m.Rollback(ctx); err != nil {
 			assert.NoError(t, err)
 		} else {
 			assert.Len(t, rolledBack, 3)

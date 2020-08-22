@@ -20,7 +20,7 @@ func (c *InMemoryConverter) Convert(ctx context.Context, f Filter) (migration.Mi
 	return c.migrations, nil
 }
 
-func NewInMemoryConverter(migrations ...migration.Migration) *InMemoryConverter  {
+func NewInMemoryConverter(migrations ...*migration.Migration) *InMemoryConverter  {
 	return &InMemoryConverter{
 		migrations: migrations,
 	}

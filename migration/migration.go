@@ -22,8 +22,8 @@ type Migration struct {
 	Rollback []string
 }
 
-func NewMigrationFromDB(timestamp string, createdAt time.Time, name string) Migration {
-	return Migration{
+func NewMigrationFromDB(timestamp string, createdAt time.Time, name string) *Migration {
+	return &Migration{
 		Key:  createKeyFromTimestampAndName(timestamp, name),
 		Name: name,
 		Version: Version{
@@ -39,8 +39,8 @@ func NewMigrationFromFile(
 	version Version,
 	migrate string,
 	rollback string,
-) (Migration, error) {
-	return Migration{
+) (*Migration, error) {
+	return &Migration{
 		Key:  key,
 		Name: name,
 		Version: version,
@@ -49,8 +49,8 @@ func NewMigrationFromFile(
 	}, nil
 }
 
-func New(timestamp, name string, migrate, rollback []string) Migration {
-	return Migration{
+func New(timestamp, name string, migrate, rollback []string) *Migration {
+	return &Migration{
 		Key:  createKeyFromTimestampAndName(timestamp, name),
 		Name: name,
 		Version: Version{
@@ -97,7 +97,7 @@ func (m *Migration) RollbackScripts() string {
 	return ms.String()
 }
 
-type Migrations []Migration
+type Migrations []*Migration
 
 func (m Migrations) Keys() (result []string) {
 	for i := range m {

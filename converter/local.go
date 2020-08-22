@@ -62,7 +62,7 @@ func (c *LocalFSConverter) Convert(ctx context.Context, f Filter) (migration.Mig
 		return nil, err
 	}
 
-	migrationsCh := make(chan migration.Migration)
+	migrationsCh := make(chan *migration.Migration)
 	var wg sync.WaitGroup
 
 	for k := range keys {
@@ -135,44 +135,42 @@ func (c *LocalFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]i
 	return keys, nil
 }
 
-func (c *LocalFSConverter) readOne(key string) (migration.Migration, error) {
-	var result migration.Migration
-
+func (c *LocalFSConverter) readOne(key string) (*migration.Migration, error) {
 	up := filepath.Join(c.folder, key+defaultMigrateFileFullExtension)
 	down := filepath.Join(c.folder, key+defaultRollbackFileFullExtension)
 
 	fUp, err := os.Open(up)
 	if err != nil {
-		return migration.Migration{}, err
+		return nil, err
 	}
 
 	defer fUp.Close()
 
 	fDown, err := os.Open(down)
 	if err != nil {
-		return migration.Migration{}, err
+		return nil, err
 	}
 
 	defer fDown.Close()
 
 	migrateContents, err := ioutil.ReadAll(fUp);
 	if err != nil {
-		return migration.Migration{}, err
+		return nil, err
 	}
 
 	rollbackContents, err := ioutil.ReadAll(fDown);
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	return c.createMigration(key, migrateContents, rollbackContents)
 }
 
-func (c *LocalFSConverter) createMigration(key string, migrateContents, rollbackContents []byte) (migration.Migration, error) {
+func (c *LocalFSConverter) createMigration(key string, migrateContents, rollbackContents []byte) (*migration.Migration, error) {
 	name := c.extractNameFromKey(key)
 	version, err := c.extractVersionFromKey(key)
 	if err != nil {
-		return migration.Migration{}, err
+		return nil, err
 	}
 
 	return migration.NewMigrationFromFile(key, name, version, string(migrateContents), string(rollbackContents))

@@ -21,7 +21,7 @@ func UseLocalFolderSource(folder string) OptionFunc {
 	}
 }
 
-func UseInMemorySource(migrations ...migration.Migration) OptionFunc {
+func UseInMemorySource(migrations ...*migration.Migration) OptionFunc {
 	return func(m *Migrator, _ string, _ *sql.DB) error {
 		conv := converter.NewInMemoryConverter(migrations...)
 

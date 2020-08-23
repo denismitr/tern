@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func Test_MigrationCanAssambleScriptsInOne(t *testing.T) {
+func Test_MigrationCanAssembleScriptsInOne(t *testing.T) {
 	tt := []struct{
 	    name string
 	    migrate []string

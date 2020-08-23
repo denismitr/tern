@@ -1,4 +1,4 @@
-package converter
+package source
 
 import (
 	"context"
@@ -30,7 +30,7 @@ type LocalFSConverter struct {
 	nameRegexp *regexp.Regexp
 }
 
-func NewLocalFSConverter(folder string) (*LocalFSConverter, error) {
+func NewLocalFSSource(folder string) (*LocalFSConverter, error) {
 	versionRegexp, nameRegexp, err := LocalFSParsingRules()
 	if err != nil {
 		return nil, err
@@ -56,7 +56,7 @@ func LocalFSParsingRules() (*regexp.Regexp, *regexp.Regexp, error) {
 	return versionRegexp, nameRegexp, nil
 }
 
-func (c *LocalFSConverter) Convert(ctx context.Context, f Filter) (migration.Migrations, error) {
+func (c *LocalFSConverter) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
 	keys, err := c.getAllKeysFromFolder(f.Keys)
 	if err != nil {
 		return nil, err

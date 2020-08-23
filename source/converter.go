@@ -1,4 +1,4 @@
-package converter
+package source
 
 import (
 	"context"
@@ -15,8 +15,8 @@ type Filter struct {
 	Keys  []string
 }
 
-type Converter interface {
-	Convert(ctx context.Context, f Filter) (migration.Migrations, error)
+type Selector interface {
+	Select(ctx context.Context, f Filter) (migration.Migrations, error)
 }
 
 func filterMigrations(m migration.Migrations, f Filter) migration.Migrations {

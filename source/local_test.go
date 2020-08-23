@@ -1,4 +1,4 @@
-package converter
+package source
 
 import (
 	"context"
@@ -18,7 +18,7 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSConverter(folder)
+	c, err := NewLocalFSSource(folder)
 	assert.NoError(t, err)
 
 	key := "1596897167_create_foo_table"
@@ -38,14 +38,14 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSConverter(folder)
+	c, err := NewLocalFSSource(folder)
 	assert.NoError(t, err)
 
 	t.Run("all migrations can be read from local folder", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
 		defer cancel()
 
-		migrations, err := c.Convert(ctx, Filter{})
+		migrations, err := c.Select(ctx, Filter{})
 
 		assert.NoError(t, err)
 		assert.Len(t, migrations, 3)
@@ -73,7 +73,7 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
 		defer cancel()
 
-		migrations, err := c.Convert(ctx, Filter{Keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
+		migrations, err := c.Select(ctx, Filter{Keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
 
 		assert.NoError(t, err)
 		assert.Len(t, migrations, 2)
@@ -119,7 +119,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSConverter(folder)
+	c, err := NewLocalFSSource(folder)
 	assert.NoError(t, err)
 
 	for _, tc := range valid {
@@ -158,7 +158,7 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSConverter(folder)
+	c, err := NewLocalFSSource(folder)
 	assert.NoError(t, err)
 
 	for _, tc := range tt {

@@ -1,4 +1,4 @@
-package converter
+package source
 
 import (
 	"context"
@@ -12,7 +12,7 @@ type InMemoryConverter struct {
 	migrations migration.Migrations
 }
 
-func (c *InMemoryConverter) Convert(ctx context.Context, f Filter) (migration.Migrations, error) {
+func (c *InMemoryConverter) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
 	if c.migrations == nil {
 		return nil, ErrNoMigrations
 	}
@@ -20,7 +20,7 @@ func (c *InMemoryConverter) Convert(ctx context.Context, f Filter) (migration.Mi
 	return c.migrations, nil
 }
 
-func NewInMemoryConverter(migrations ...*migration.Migration) *InMemoryConverter  {
+func NewInMemorySource(migrations ...*migration.Migration) *InMemoryConverter  {
 	return &InMemoryConverter{
 		migrations: migrations,
 	}

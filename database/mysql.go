@@ -66,7 +66,7 @@ func (g *MySQL) Close() error {
 func (g *MySQL) Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	var migrated migration.Migrations
 
-	if err := g.execUnderLock(ctx, "migrate", func(tx *sql.Tx, versions []migration.Version) error {
+	if err := g.execUnderLock(ctx, operationMigrate, func(tx *sql.Tx, versions []migration.Version) error {
 		insertVersionQuery := g.createInsertVersionsQuery()
 
 		var scheduled migration.Migrations
@@ -103,7 +103,7 @@ func (g *MySQL) Migrate(ctx context.Context, migrations migration.Migrations, p 
 func (g *MySQL) Rollback(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	var executed migration.Migrations
 
-	if err := g.execUnderLock(ctx, "rollback", func(tx *sql.Tx, versions []migration.Version) error {
+	if err := g.execUnderLock(ctx, operationRollback, func(tx *sql.Tx, versions []migration.Version) error {
 		deleteVersionQuery := g.createDeleteVersionQuery()
 
 		var scheduled migration.Migrations
@@ -145,7 +145,7 @@ func (g *MySQL) Refresh(
 	var rolledBack migration.Migrations
 	var migrated migration.Migrations
 
-	if err := g.execUnderLock(ctx, "refresh", func(tx *sql.Tx, versions []migration.Version) error {
+	if err := g.execUnderLock(ctx, operationRefresh, func(tx *sql.Tx, versions []migration.Version) error {
 		deleteVersionQuery := g.createDeleteVersionQuery()
 		insertVersionQuery := g.createInsertVersionsQuery()
 

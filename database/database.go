@@ -13,6 +13,12 @@ import (
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
 var ErrNothingToMigrate = errors.New("nothing to migrate")
 
+const (
+	operationRollback = "rollback"
+	operationMigrate  = "migrate"
+	operationRefresh  = "refresh"
+)
+
 type ServiceGateway interface {
 	io.Closer
 

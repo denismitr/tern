@@ -413,6 +413,56 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+
+	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
+		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource(mysqlMigrationsFolder))
+		assert.NoError(t, err)
+		defer m.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		defer cancel()
+
+		// DO: clean up
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := m.Migrate(ctx); err != nil {
+			assert.NoError(t, err)
+		}
+
+		// DO: lets bring it down
+		if rolledBack, err := m.Rollback(ctx, WithSteps(2)); err != nil {
+			assert.NoError(t, err)
+		} else {
+			assert.Len(t, rolledBack, 2)
+			assert.Equal(t, "1597897177_create_baz_table", rolledBack[0].Key)
+			assert.Equal(t, "1596897188_create_bar_table", rolledBack[1].Key)
+		}
+
+		// expect migrations table to be clean
+		versionsAfterDown, err := gateway.ReadVersions(ctx)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+
+		assert.Len(t, versionsAfterDown, 1)
+		assert.Equal(t, "1596897167", versionsAfterDown[0].Timestamp)
+
+		// expect 4 tables to exist now in the DB
+		// migrations table and 3 tables created by scripts
+		tables, err := gateway.ShowTables(ctx)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+
+		assert.Len(t, tables, 2)
+		assert.Equal(t, []string{"foo", "migrations"}, tables)
+
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 

@@ -26,8 +26,8 @@ type ServiceGateway interface {
 type Gateway interface {
 	io.Closer
 
-	Up(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
-	Down(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
+	Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
+	Rollback(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
 	Refresh(ctx context.Context, migrations migration.Migrations, plan Plan) (migration.Migrations, migration.Migrations, error)
 }
 

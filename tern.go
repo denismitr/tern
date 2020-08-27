@@ -63,7 +63,7 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 	}
 
 	p := database.Plan{Steps: act.steps}
-	migrated, err := m.gateway.Up(ctx, migrations, p)
+	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
 		return nil, err
 	}
@@ -79,14 +79,14 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 		f(act)
 	}
 
-	migrations, err := m.converter.Select(ctx, source.Filter{})
+	migrations, err := m.converter.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not rollback migrations")
 	}
 
-	executed, err := m.gateway.Down(ctx, migrations, database.Plan{Steps: act.steps});
+	executed, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps});
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "could not rollback migrations")
 	}
 
 	return executed, nil

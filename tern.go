@@ -3,7 +3,7 @@ package tern
 import (
 	"context"
 	"database/sql"
-	"github.com/denismitr/tern/converter"
+	"github.com/denismitr/tern/source"
 	"github.com/denismitr/tern/database"
 	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
@@ -13,9 +13,12 @@ var ErrGatewayNotInitialized = errors.New("database gateway has not been initial
 
 type Migrator struct {
 	gateway   database.Gateway
-	converter converter.Converter
+	converter source.Selector
 }
 
+// NewMigrator creates a migrator using the sql.DB and option callbacks
+// to customize the newly created configurator, when no custom options
+// are required a number of defaults will be applied
 func NewMigrator(driver string, db *sql.DB, opts ...OptionFunc) (*Migrator, error) {
 	m := new(Migrator)
 
@@ -27,7 +30,7 @@ func NewMigrator(driver string, db *sql.DB, opts ...OptionFunc) (*Migrator, erro
 
 	// Default converter implementation
 	if m.converter == nil {
-		localFsConverter, err := converter.NewLocalFSConverter(converter.DefaultMigrationsFolder)
+		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder)
 		if err != nil {
 			return nil, err
 		}
@@ -46,13 +49,15 @@ func NewMigrator(driver string, db *sql.DB, opts ...OptionFunc) (*Migrator, erro
 	return m, nil
 }
 
-func (m *Migrator) Up(ctx context.Context, cfs ...ActionConfigurator) ([]string, error) {
+// Migrate the migrations using action configurator callbacks to customize
+// the process of migration
+func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]string, error) {
 	act := new(action)
 	for _, f := range cfs {
 		f(act)
 	}
 
-	migrations, err := m.converter.Convert(ctx, converter.Filter{Keys: act.keys})
+	migrations, err := m.converter.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
 		return nil, err
 	}
@@ -66,13 +71,15 @@ func (m *Migrator) Up(ctx context.Context, cfs ...ActionConfigurator) ([]string,
 	return migrated.Keys(), nil
 }
 
-func (m *Migrator) Down(ctx context.Context, cfs ...ActionConfigurator) (migration.Migrations, error) {
+// Rollback the migrations using action configurator callbacks
+// to customize the rollback process
+func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (migration.Migrations, error) {
 	act := new(action)
 	for _, f := range cfs {
 		f(act)
 	}
 
-	migrations, err := m.converter.Convert(ctx, converter.Filter{})
+	migrations, err := m.converter.Select(ctx, source.Filter{})
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +92,7 @@ func (m *Migrator) Down(ctx context.Context, cfs ...ActionConfigurator) (migrati
 	return executed, nil
 }
 
+// Close the migrator
 func (m *Migrator) Close() error {
 	if m.gateway == nil {
 		return ErrGatewayNotInitialized
@@ -93,13 +101,15 @@ func (m *Migrator) Close() error {
 	return m.gateway.Close()
 }
 
+// Refresh first rollbacks the migrations and then migrates them again
+// uses the action configurator callbacks to customize the process
 func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migration.Migrations, migration.Migrations, error) {
 	act := new(action)
 	for _, f := range cfs {
 		f(act)
 	}
 
-	migrations, err := m.converter.Convert(ctx, converter.Filter{})
+	migrations, err := m.converter.Select(ctx, source.Filter{})
 	if err != nil {
 		return nil, nil, err
 	}

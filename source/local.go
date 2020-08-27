@@ -1,4 +1,4 @@
-package converter
+package source
 
 import (
 	"context"
@@ -16,18 +16,22 @@ import (
 
 const DefaultMigrationsFolder = "./migrations"
 
+const defaultSqlExtension = "sql"
+const migrateFileSuffix = "migrate"
+const rollbackFileSuffix = "rollback"
+const defaultMigrateFileFullExtension = ".migrate.sql"
+const defaultRollbackFileFullExtension = ".rollback.sql"
+
+type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
+
 type LocalFSConverter struct {
 	folder string
 	versionRegexp *regexp.Regexp
 	nameRegexp *regexp.Regexp
 }
 
-func NewLocalFSConverter(folder string) (*LocalFSConverter, error) {
-	versionRegexp, err := regexp.Compile(`^(?P<version>\d{1,12})(_\w+)?$`)
-	if err != nil {
-		return nil, err
-	}
-	nameRegexp, err := regexp.Compile(`^\d{1,12}_(?P<name>\w+[\w_-]+)?$`)
+func NewLocalFSSource(folder string) (*LocalFSConverter, error) {
+	versionRegexp, nameRegexp, err := LocalFSParsingRules()
 	if err != nil {
 		return nil, err
 	}
@@ -39,13 +43,26 @@ func NewLocalFSConverter(folder string) (*LocalFSConverter, error) {
 	}, nil
 }
 
-func (c *LocalFSConverter) Convert(ctx context.Context, f Filter) (migration.Migrations, error) {
+func LocalFSParsingRules() (*regexp.Regexp, *regexp.Regexp, error) {
+	versionRegexp, err := regexp.Compile(`^(?P<version>\d{1,12})(_\w+)?$`)
+	if err != nil {
+		return nil, nil, err
+	}
+	nameRegexp, err := regexp.Compile(`^\d{1,12}_(?P<name>\w+[\w_-]+)?$`)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return versionRegexp, nameRegexp, nil
+}
+
+func (c *LocalFSConverter) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
 	keys, err := c.getAllKeysFromFolder(f.Keys)
 	if err != nil {
 		return nil, err
 	}
 
-	migrationsCh := make(chan migration.Migration)
+	migrationsCh := make(chan *migration.Migration)
 	var wg sync.WaitGroup
 
 	for k := range keys {
@@ -118,46 +135,45 @@ func (c *LocalFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]i
 	return keys, nil
 }
 
-func (c *LocalFSConverter) readOne(key string) (migration.Migration, error) {
-	var result migration.Migration
-
-	up := filepath.Join(c.folder, key+defaultUpExtension)
-	down := filepath.Join(c.folder, key+defaultDownExtension)
+func (c *LocalFSConverter) readOne(key string) (*migration.Migration, error) {
+	up := filepath.Join(c.folder, key+defaultMigrateFileFullExtension)
+	down := filepath.Join(c.folder, key+defaultRollbackFileFullExtension)
 
 	fUp, err := os.Open(up)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	defer fUp.Close()
 
 	fDown, err := os.Open(down)
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
 	defer fDown.Close()
 
-	if upContents, err := ioutil.ReadAll(fUp); err != nil {
-		return result, err
-	} else {
-		result.Up = string(upContents)
-	}
-
-	if downContents, err := ioutil.ReadAll(fDown); err != nil {
-		return result, err
-	} else {
-		result.Down = string(downContents)
-	}
-
-	result.Key = key
-	result.Name = c.extractNameFromKey(key)
-	result.Version, err = c.extractVersionFromKey(key)
+	migrateContents, err := ioutil.ReadAll(fUp);
 	if err != nil {
-		return result, err
+		return nil, err
 	}
 
-	return result, nil
+	rollbackContents, err := ioutil.ReadAll(fDown);
+	if err != nil {
+		return nil, err
+	}
+
+	return c.createMigration(key, migrateContents, rollbackContents)
+}
+
+func (c *LocalFSConverter) createMigration(key string, migrateContents, rollbackContents []byte) (*migration.Migration, error) {
+	name := c.extractNameFromKey(key)
+	version, err := c.extractVersionFromKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	return migration.NewMigrationFromFile(key, name, version, string(migrateContents), string(rollbackContents))
 }
 
 func (c *LocalFSConverter) extractVersionFromKey(key string) (migration.Version, error) {
@@ -190,7 +206,7 @@ func convertLocalFilePathToKey(path string) (string, error) {
 		return "", ErrNotAMigrationFile
 	}
 
-	if segments[2] != "sql" || !(segments[1] == "up" || segments[1] == "down") {
+	if segments[2] != defaultSqlExtension || !(segments[1] == migrateFileSuffix || segments[1] == rollbackFileSuffix) {
 		return "", ErrNotAMigrationFile
 	}
 

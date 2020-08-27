@@ -1,4 +1,4 @@
-package converter
+package source
 
 import (
 	"context"
@@ -18,7 +18,7 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSConverter(folder)
+	c, err := NewLocalFSSource(folder)
 	assert.NoError(t, err)
 
 	key := "1596897167_create_foo_table"
@@ -28,8 +28,8 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "1596897167", m.Version.Timestamp)
 	assert.Equal(t, "Create foo table", m.Name)
-	assert.Equal(t, "CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;", m.Up)
-	assert.Equal(t, "DROP TABLE IF EXISTS foo;", m.Down)
+	assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"}, m.Migrate)
+	assert.Equal(t, []string{"DROP TABLE IF EXISTS foo;"}, m.Rollback)
 }
 
 func Test_ConvertLocalFolder(t *testing.T) {
@@ -38,14 +38,14 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSConverter(folder)
+	c, err := NewLocalFSSource(folder)
 	assert.NoError(t, err)
 
 	t.Run("all migrations can be read from local folder", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
 		defer cancel()
 
-		migrations, err := c.Convert(ctx, Filter{})
+		migrations, err := c.Select(ctx, Filter{})
 
 		assert.NoError(t, err)
 		assert.Len(t, migrations, 3)
@@ -53,27 +53,27 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		assert.Equal(t, "Create foo table", migrations[0].Name)
 		assert.Equal(t, "1596897167", migrations[0].Version.Timestamp)
 		assert.Equal(t, "1596897167_create_foo_table", migrations[0].Key)
-		assert.Equal(t, "CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;", migrations[0].Up)
-		assert.Equal(t, "DROP TABLE IF EXISTS foo;", migrations[0].Down)
+		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[0].Migrate)
+		assert.Equal(t, []string{"DROP TABLE IF EXISTS foo;"}, migrations[0].Rollback)
 
 		assert.Equal(t, "Create bar table", migrations[1].Name)
 		assert.Equal(t, "1596897188", migrations[1].Version.Timestamp)
 		assert.Equal(t, "1596897188_create_bar_table", migrations[1].Key)
-		assert.Equal(t, "CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;", migrations[1].Up)
-		assert.Equal(t, "DROP TABLE IF EXISTS bar;", migrations[1].Down)
+		assert.Equal(t, []string{"CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[1].Migrate)
+		assert.Equal(t, []string{"DROP TABLE IF EXISTS bar;"}, migrations[1].Rollback)
 
 		assert.Equal(t, "Create baz table", migrations[2].Name)
 		assert.Equal(t, "1597897177", migrations[2].Version.Timestamp)
 		assert.Equal(t, "1597897177_create_baz_table", migrations[2].Key)
-		assert.Equal(t, "CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;", migrations[2].Up)
-		assert.Equal(t, "DROP TABLE IF EXISTS baz;", migrations[2].Down)
+		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"}, migrations[2].Migrate)
+		assert.Equal(t, []string{"DROP TABLE IF EXISTS baz;"}, migrations[2].Rollback)
 	})
 
 	t.Run("specified migrations can be read from local folder", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
 		defer cancel()
 
-		migrations, err := c.Convert(ctx, Filter{Keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
+		migrations, err := c.Select(ctx, Filter{Keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
 
 		assert.NoError(t, err)
 		assert.Len(t, migrations, 2)
@@ -81,14 +81,14 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		assert.Equal(t, "Create bar table", migrations[0].Name)
 		assert.Equal(t, "1596897188", migrations[0].Version.Timestamp)
 		assert.Equal(t, "1596897188_create_bar_table", migrations[0].Key)
-		assert.Equal(t, "CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;", migrations[0].Up)
-		assert.Equal(t, "DROP TABLE IF EXISTS bar;", migrations[0].Down)
+		assert.Equal(t, []string{"CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[0].Migrate)
+		assert.Equal(t, []string{"DROP TABLE IF EXISTS bar;"}, migrations[0].Rollback)
 
 		assert.Equal(t, "Create baz table", migrations[1].Name)
 		assert.Equal(t, "1597897177", migrations[1].Version.Timestamp)
 		assert.Equal(t, "1597897177_create_baz_table", migrations[1].Key)
-		assert.Equal(t, "CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;", migrations[1].Up)
-		assert.Equal(t, "DROP TABLE IF EXISTS baz;", migrations[1].Down)
+		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"}, migrations[1].Migrate)
+		assert.Equal(t, []string{"DROP TABLE IF EXISTS baz;"}, migrations[1].Rollback)
 	})
 }
 
@@ -119,7 +119,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSConverter(folder)
+	c, err := NewLocalFSSource(folder)
 	assert.NoError(t, err)
 
 	for _, tc := range valid {
@@ -158,7 +158,7 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSConverter(folder)
+	c, err := NewLocalFSSource(folder)
 	assert.NoError(t, err)
 
 	for _, tc := range tt {
@@ -174,10 +174,10 @@ func Test_ConvertPathToKey(t *testing.T) {
 		in string
 		out string
 	}{
-		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_bar_table.up.sql", out: "1596897188_create_bar_table"},
-		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.down.sql", out: "1596897188_create_foo_table"},
-		{in: "1596897188_create_foo_table.down.sql", out: "1596897188_create_foo_table"},
-		{in: "./1596897188_create_foo_table.down.sql", out: "1596897188_create_foo_table"},
+		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_bar_table.migrate.sql", out: "1596897188_create_bar_table"},
+		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.rollback.sql", out: "1596897188_create_foo_table"},
+		{in: "1596897188_create_foo_table.rollback.sql", out: "1596897188_create_foo_table"},
+		{in: "./1596897188_create_foo_table.rollback.sql", out: "1596897188_create_foo_table"},
 	}
 
 	invalid := []struct{
@@ -185,11 +185,11 @@ func Test_ConvertPathToKey(t *testing.T) {
 		err error
 	}{
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_bar_table.sql", err: ErrNotAMigrationFile},
-		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.down", err: ErrNotAMigrationFile},
+		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.rollback", err: ErrNotAMigrationFile},
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table", err: ErrNotAMigrationFile},
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.foo", err: ErrNotAMigrationFile},
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_foo_table.", err: ErrNotAMigrationFile},
-		{in: ".1596897188_create_foo_table.up.sql", err: ErrNotAMigrationFile},
+		{in: ".1596897188_create_foo_table.migrate.sql", err: ErrNotAMigrationFile},
 	}
 
 	for _, tc := range valid {

@@ -1,4 +1,4 @@
-package converter
+package source
 
 import (
 	"context"
@@ -11,15 +11,12 @@ var ErrInvalidTimestamp = errors.New("invalid timestamp in migration filename")
 var ErrNotAMigrationFile = errors.New("not a migration file")
 var ErrTooManyFilesForKey = errors.New("too many files for single mysqlDefaultLockKey")
 
-const defaultUpExtension = ".up.sql"
-const defaultDownExtension = ".down.sql"
-
 type Filter struct {
 	Keys  []string
 }
 
-type Converter interface {
-	Convert(ctx context.Context, f Filter) (migration.Migrations, error)
+type Selector interface {
+	Select(ctx context.Context, f Filter) (migration.Migrations, error)
 }
 
 func filterMigrations(m migration.Migrations, f Filter) migration.Migrations {

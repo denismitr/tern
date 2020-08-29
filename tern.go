@@ -12,8 +12,9 @@ import (
 var ErrGatewayNotInitialized = errors.New("database gateway has not been initialized")
 
 type Migrator struct {
-	gateway   database.Gateway
-	converter source.Selector
+	gateway        database.Gateway
+	converter      source.Selector
+	connectOptions *database.ConnectOptions
 }
 
 // NewMigrator creates a migrator using the sql.DB and option callbacks
@@ -31,15 +32,19 @@ func NewMigrator(driver string, db *sql.DB, opts ...OptionFunc) (*Migrator, erro
 	// Default converter implementation
 	if m.converter == nil {
 		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder)
-		if err != nil {
+		if err != nil  {
 			return nil, err
 		}
 		m.converter = localFsConverter
 	}
 
+	if m.connectOptions == nil && m.gateway == nil {
+		m.connectOptions = database.NewDefaultConnectOptions()
+	}
+
 	// Default gateway implementation
 	if m.gateway == nil {
-		gateway, err := database.CreateGateway(driver, db, database.DefaultMigrationsTable)
+		gateway, err := database.CreateGateway(driver, db, database.DefaultMigrationsTable, m.connectOptions)
 		if err != nil {
 			return nil, err
 		}

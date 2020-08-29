@@ -194,10 +194,13 @@ func (g *MySQL) ReadVersions(ctx context.Context) ([]migration.Version, error) {
 	return result, nil
 }
 
-func NewMysqlGateway(db *sql.DB, tableName, lockKey string, lockFor int) (*MySQL, error) {
-	conn, err := db.Conn(context.Background()) // fixme
+func NewMysqlGateway(db *sql.DB, connector connector, tableName, lockKey string, lockFor int) (*MySQL, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), connector.timeout())
+	defer cancel()
+
+	conn, err := connector.connect(ctx, db)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not establish DB connection")
+		return nil, err
 	}
 
 	return &MySQL{

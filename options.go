@@ -2,9 +2,9 @@ package tern
 
 import (
 	"database/sql"
-	"github.com/denismitr/tern/source"
 	"github.com/denismitr/tern/database"
 	"github.com/denismitr/tern/migration"
+	"github.com/denismitr/tern/source"
 )
 
 type OptionFunc func(m *Migrator, driver string, db *sql.DB) error
@@ -30,14 +30,22 @@ func UseInMemorySource(migrations ...*migration.Migration) OptionFunc {
 	}
 }
 
-func WithMysqlConfig(migrationsTable, lockKey string, lockFor int) OptionFunc {
+func WithMysqlConfig(migrationsTable, lockKey string, lockFor int, connectOptions *database.ConnectOptions) OptionFunc {
 	return func(m *Migrator, driver string, db *sql.DB) error {
-		gateway, err := database.NewMysqlGateway(db, migrationsTable, lockKey, lockFor)
+		connector := database.MakeRetryingConnector(connectOptions)
+		gateway, err := database.NewMysqlGateway(db, connector, migrationsTable, lockKey, lockFor)
 		if err != nil {
 			return err
 		}
 
 		m.gateway = gateway
+		return nil
+	}
+}
+
+func WithConnectOptions(connectOptions *database.ConnectOptions) OptionFunc {
+	return func(m *Migrator, driver string, db *sql.DB) error {
+		m.connectOptions = connectOptions
 		return nil
 	}
 }

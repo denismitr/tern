@@ -38,10 +38,12 @@ type Gateway interface {
 }
 
 // CreateGateway for basic migration functionality
-func CreateGateway(driver string, db *sql.DB, migrationsTable string) (Gateway, error) {
+func CreateGateway(driver string, db *sql.DB, migrationsTable string, connectOptions *ConnectOptions) (Gateway, error) {
+	connector := MakeRetryingConnector(connectOptions)
+
 	switch driver {
 	case "mysql":
-		return NewMysqlGateway(db, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
+		return NewMysqlGateway(db, connector, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
@@ -50,9 +52,11 @@ func CreateGateway(driver string, db *sql.DB, migrationsTable string) (Gateway, 
 // CreateServiceGateway - creates gateway with service functionality
 // such as listing all tables in database and reading migration versions
 func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (ServiceGateway, error) {
+	connector := MakeRetryingConnector(NewDefaultConnectOptions())
+
 	switch driver {
 	case "mysql":
-		return NewMysqlGateway(db, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
+		return NewMysqlGateway(db, connector, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)

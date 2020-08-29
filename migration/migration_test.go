@@ -7,6 +7,8 @@ import (
 )
 
 func Test_MigrationCanAssembleScriptsInOne(t *testing.T) {
+	t.Parallel()
+
 	tt := []struct{
 	    name string
 	    migrate []string
@@ -38,6 +40,7 @@ func Test_MigrationCanAssembleScriptsInOne(t *testing.T) {
 	}
 
 	for _, tc := range tt {
+		tc := tc
 	    t.Run(tc.name, func(t *testing.T) {
 			m := Migration{
 				Migrate:  tc.migrate,

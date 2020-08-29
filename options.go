@@ -43,11 +43,7 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 			},
 		}
 
-		connectOpts := &database.ConnectOptions{
-			MaxAttempts: 10,
-			MaxTimeout:  30 * time.Second,
-			Step:        1 * time.Second,
-		}
+		connectOpts := database.NewDefaultConnectOptions()
 
 		for _, oFunc := range options {
 			oFunc(mysqlOpts, connectOpts)

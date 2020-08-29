@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+const (
+	DefaultConnectionAttemts     = 100
+	DefaultConnectionTimeout     = 60 * time.Second
+	DefaultConnectionAttemptStep = 2 * time.Second
+)
+
 type ConnectOptions struct {
 	MaxAttempts int
 	MaxTimeout  time.Duration
@@ -16,9 +22,9 @@ type ConnectOptions struct {
 
 func NewDefaultConnectOptions() *ConnectOptions {
 	return &ConnectOptions{
-		MaxAttempts: 60,
-		MaxTimeout: 60 * time.Second,
-		Step: 1 * time.Second,
+		MaxAttempts: DefaultConnectionAttemts,
+		MaxTimeout:  DefaultConnectionTimeout,
+		Step:        DefaultConnectionAttemptStep,
 	}
 }
 
@@ -41,7 +47,7 @@ func MakeRetryingConnector(options *ConnectOptions) RetryingConnector {
 
 func (c RetryingConnector) connect(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
 	var conn *sql.Conn
-	if err := retry.Incremental(ctx, 2 * time.Second, c.options.MaxAttempts, func(attempt int) (err error) {
+	if err := retry.Incremental(ctx, 2*time.Second, c.options.MaxAttempts, func(attempt int) (err error) {
 		conn, err = db.Conn(ctx)
 		if err != nil {
 			return errors.Wrap(err, "could not establish DB connection")
@@ -54,5 +60,3 @@ func (c RetryingConnector) connect(ctx context.Context, db *sql.DB) (*sql.Conn, 
 
 	return conn, nil
 }
-
-

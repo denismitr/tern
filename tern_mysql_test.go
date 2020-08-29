@@ -701,6 +701,8 @@ func TestInMemorySourceMigrations(t *testing.T) {
 				WithMySQLMigrationTable("migration_versions"),
 				WithMySQLMaxConnectionAttempts(10),
 				WithMySQLConnectionTimeout(3 * time.Second),
+				WithMySQLLockFor(10),
+				WithMySQLLockKey("migrator"),
 			),
 			source,
 		)

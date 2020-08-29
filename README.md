@@ -42,3 +42,5 @@ if err != nil {
 fmt.Printf("%#v", migrated)
 // []string{"1596897167_create_foo_table", "1596897188_create_bar_table", "1597897177_create_baz_table"}
 ```
+
+Apart from `Migrate` command, there are `Rollback` and `Refresh` commands.

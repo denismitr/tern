@@ -21,6 +21,8 @@ const DefaultMigrationsTable = "migrations"
 const MysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
 const MysqlDefaultLockKey = "tern_migrations"
 const MysqlDefaultLockSeconds = 3
+const mysqlDeleteVersionQuery = "DELETE FROM %s WHERE version = ?;"
+const mysqlInsertVersionQuery = "INSERT INTO %s (version, name) VALUES (?, ?);"
 
 type mySQLLocker struct {
 	lockKey string
@@ -222,11 +224,11 @@ func (g *MySQLGateway) ReadVersions(ctx context.Context) ([]migration.Version, e
 }
 
 func (g *MySQLGateway) createDeleteVersionQuery() string {
-	return fmt.Sprintf("DELETE FROM %s WHERE version = ?;", g.migrationsTable)
+	return fmt.Sprintf(mysqlDeleteVersionQuery, g.migrationsTable)
 }
 
 func (g *MySQLGateway) createInsertVersionsQuery() string {
-	return fmt.Sprintf("INSERT INTO %s (version, name) VALUES (?, ?);", g.migrationsTable)
+	return fmt.Sprintf(mysqlInsertVersionQuery, g.migrationsTable)
 }
 
 func (g *MySQLGateway) CreateMigrationsTable(ctx context.Context) error {

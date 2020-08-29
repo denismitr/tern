@@ -12,6 +12,7 @@ import (
 
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
 var ErrNothingToMigrate = errors.New("nothing to migrate")
+var ErrMigrationVersionNotSpecified = errors.New("migration version not specified")
 
 const (
 	operationRollback = "rollback"
@@ -19,12 +20,16 @@ const (
 	operationRefresh  = "refresh"
 )
 
-type migrateFunc func(ctx context.Context, tx *sql.Tx, migration *migration.Migration, insertQuery string) error
-type rollbackFunc func(ctx context.Context, tx *sql.Tx, migration *migration.Migration, removeVersionQuery string) error
+type migrateFunc func(ctx context.Context, ex ctxExecutor, migration *migration.Migration, insertQuery string) error
+type rollbackFunc func(ctx context.Context, ex ctxExecutor, migration *migration.Migration, removeVersionQuery string) error
 
 type handlers struct {
 	migrate         migrateFunc
 	rollback        rollbackFunc
+}
+
+type ctxExecutor interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
 type Plan struct {
@@ -74,34 +79,40 @@ func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (Se
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
 }
 
-func migrate(ctx context.Context, tx *sql.Tx, migration *migration.Migration, insertQuery string) error {
+func migrate(ctx context.Context, tx ctxExecutor, migration *migration.Migration, insertQuery string) error {
+	if migration.Version.Timestamp == "" {
+		return ErrMigrationVersionNotSpecified
+	}
+
 	if _, err := tx.ExecContext(ctx, migration.MigrateScripts()); err != nil {
-		return errors.Wrapf(err, "could not execute migrate migration [%s]", migration.Key)
+		return errors.Wrapf(err, "could not run migration [%s]", migration.Key)
 	}
 
 	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version.Timestamp, migration.Name); err != nil {
 		return errors.Wrapf(
 			err,
-			"could not insert migration version with key [%s] with query %s",
-			migration.Key,
-			insertQuery,
+			"could not insert migration version [%s]",
+			migration.Version.Timestamp,
 		)
 	}
 
 	return nil
 }
 
-func rollback(ctx context.Context, tx *sql.Tx, migration *migration.Migration, removeVersionQuery string) error {
-	if _, err := tx.ExecContext(ctx, migration.RollbackScripts()); err != nil {
-		return errors.Wrapf(err, "could not execute rollback migration %s", migration.Key)
+func rollback(ctx context.Context, ex ctxExecutor, migration *migration.Migration, removeVersionQuery string) error {
+	if migration.Version.Timestamp == "" {
+		return ErrMigrationVersionNotSpecified
 	}
 
-	if _, err := tx.ExecContext(ctx, removeVersionQuery, migration.Version.Timestamp); err != nil {
+	if _, err := ex.ExecContext(ctx, migration.RollbackScripts()); err != nil {
+		return errors.Wrapf(err, "could not rollback migration [%s]", migration.Key)
+	}
+
+	if _, err := ex.ExecContext(ctx, removeVersionQuery, migration.Version.Timestamp); err != nil {
 		return errors.Wrapf(
 			err,
-			"could not remove migration version [%s] with query [%s]",
+			"could not remove migration version [%s]",
 			migration.Version.Timestamp,
-			removeVersionQuery,
 		)
 	}
 

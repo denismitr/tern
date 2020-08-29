@@ -24,6 +24,12 @@ const MysqlDefaultLockSeconds = 3
 const mysqlDeleteVersionQuery = "DELETE FROM %s WHERE version = ?;"
 const mysqlInsertVersionQuery = "INSERT INTO %s (version, name) VALUES (?, ?);"
 
+type MySQLOptions struct {
+	CommonOptions
+	LockKey        string
+	LockFor        int
+}
+
 type mySQLLocker struct {
 	lockKey string
 	lockFor int
@@ -59,7 +65,7 @@ var _ ServiceGateway = (*MySQLGateway)(nil)
 
 // NewMySQLGateway - creates a new MySQL gateway and uses the connector interface to attempt to
 // connect to the MySQL database
-func NewMySQLGateway(db *sql.DB, connector connector, tableName, lockKey string, lockFor int) (*MySQLGateway, error) {
+func NewMySQLGateway(db *sql.DB, connector connector, options *MySQLOptions) (*MySQLGateway, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), connector.timeout())
 	defer cancel()
 
@@ -75,10 +81,10 @@ func NewMySQLGateway(db *sql.DB, connector connector, tableName, lockKey string,
 			migrate:  migrate,
 			rollback: rollback,
 		},
-		migrationsTable: tableName,
+		migrationsTable: options.MigrationsTable,
 		locker: &mySQLLocker{
-			lockKey: lockKey,
-			lockFor: lockFor,
+			lockKey: options.LockKey,
+			lockFor: options.LockFor,
 		},
 	}, nil
 }

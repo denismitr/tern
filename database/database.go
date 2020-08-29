@@ -20,6 +20,10 @@ const (
 	operationRefresh  = "refresh"
 )
 
+type CommonOptions struct {
+	MigrationsTable string
+}
+
 type migrateFunc func(ctx context.Context, ex ctxExecutor, migration *migration.Migration, insertQuery string) error
 type rollbackFunc func(ctx context.Context, ex ctxExecutor, migration *migration.Migration, removeVersionQuery string) error
 
@@ -54,18 +58,6 @@ type Gateway interface {
 	Refresh(ctx context.Context, migrations migration.Migrations, plan Plan) (migration.Migrations, migration.Migrations, error)
 }
 
-// CreateGateway for basic migration functionality
-func CreateGateway(driver string, db *sql.DB, migrationsTable string, connectOptions *ConnectOptions) (Gateway, error) {
-	connector := MakeRetryingConnector(connectOptions)
-
-	switch driver {
-	case "mysql":
-		return NewMySQLGateway(db, connector, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
-	}
-
-	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
-}
-
 // CreateServiceGateway - creates gateway with service functionality
 // such as listing all tables in database and reading migration versions
 func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (ServiceGateway, error) {
@@ -73,7 +65,14 @@ func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (Se
 
 	switch driver {
 	case "mysql":
-		return NewMySQLGateway(db, connector, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
+		return NewMySQLGateway(db, connector,
+			&MySQLOptions{
+				CommonOptions: CommonOptions{
+					MigrationsTable: migrationsTable,
+				},
+				LockFor: MysqlDefaultLockSeconds,
+				LockKey: MysqlDefaultLockKey,
+			})
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)

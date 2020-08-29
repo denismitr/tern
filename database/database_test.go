@@ -6,44 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/denismitr/tern/migration"
-	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
-
-func Test_CreateGateway(t *testing.T) {
-	t.Run("can be created from driver", func(t *testing.T) {
-		db, err := sqlx.Open("mysql", "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		defer db.Close()
-
-		gateway, err := CreateGateway(db.DriverName(), db.DB, "migrations", NewDefaultConnectOptions())
-		assert.NoError(t, err)
-		assert.NotNil(t, gateway)
-
-		defer gateway.Close()
-
-		_, ok := gateway.(*MySQLGateway)
-		assert.True(t, ok, "should be a value of mysqlGateway")
-	})
-
-	t.Run("will_return_error_on_unsupported_db_driver", func(t *testing.T) {
-		db, err := sqlx.Open("sqlite3", "./test.sqlite")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		defer db.Close()
-
-		gateway, err := CreateGateway(db.DriverName(), db.DB, "migrations", NewDefaultConnectOptions())
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, ErrUnsupportedDBDriver))
-		assert.Nil(t, gateway)
-	})
-}
 
 type ctxExecutorMock struct {
 	calls      int

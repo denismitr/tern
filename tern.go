@@ -2,10 +2,9 @@ package tern
 
 import (
 	"context"
-	"database/sql"
-	"github.com/denismitr/tern/source"
 	"github.com/denismitr/tern/database"
 	"github.com/denismitr/tern/migration"
+	"github.com/denismitr/tern/source"
 	"github.com/pkg/errors"
 )
 
@@ -20,13 +19,17 @@ type Migrator struct {
 // NewMigrator creates a migrator using the sql.DB and option callbacks
 // to customize the newly created configurator, when no custom options
 // are required a number of defaults will be applied
-func NewMigrator(driver string, db *sql.DB, opts ...OptionFunc) (*Migrator, error) {
+func NewMigrator(opts ...OptionFunc) (*Migrator, error) {
 	m := new(Migrator)
 
 	for _, oFunc := range opts {
-		if err := oFunc(m, driver, db); err != nil {
+		if err := oFunc(m); err != nil {
 			return nil, err
 		}
+	}
+
+	if m.gateway == nil {
+		return nil, ErrGatewayNotInitialized
 	}
 
 	// Default converter implementation
@@ -36,19 +39,6 @@ func NewMigrator(driver string, db *sql.DB, opts ...OptionFunc) (*Migrator, erro
 			return nil, err
 		}
 		m.converter = localFsConverter
-	}
-
-	if m.connectOptions == nil && m.gateway == nil {
-		m.connectOptions = database.NewDefaultConnectOptions()
-	}
-
-	// Default gateway implementation
-	if m.gateway == nil {
-		gateway, err := database.CreateGateway(driver, db, database.DefaultMigrationsTable, m.connectOptions)
-		if err != nil {
-			return nil, err
-		}
-		m.gateway = gateway
 	}
 
 	return m, nil

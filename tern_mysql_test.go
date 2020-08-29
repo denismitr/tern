@@ -24,7 +24,7 @@ func Test_MigratorCanBeInstantiated(t *testing.T) {
 
 	defer db.Close()
 
-	m, err := NewMigrator(db.DriverName(), db.DB)
+	m, err := NewMigrator(UseMySQL(db.DB))
 	assert.NoError(t, err)
 	assert.NotNil(t, m)
 }
@@ -45,7 +45,11 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	defer gateway.Close()
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
-		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource(mysqlMigrationsFolder))
+		m, err := NewMigrator(
+			UseMySQL(db.DB),
+			UseLocalFolderSource(mysqlMigrationsFolder),
+		)
+
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -130,7 +134,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource(mysqlMigrationsFolder))
+		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -203,7 +207,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource(mysqlMigrationsFolder))
+		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -250,7 +254,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("run_single_migration_when_step_is_one", func(t *testing.T) {
-		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource(mysqlMigrationsFolder))
+		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -302,7 +306,11 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_migrate_a_single_file", func(t *testing.T) {
-		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource(mysqlMigrationsFolder))
+		m, err := NewMigrator(
+			UseMySQL(db.DB),
+			UseLocalFolderSource(mysqlMigrationsFolder),
+		)
+
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -352,7 +360,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_refresh_all_migrations", func(t *testing.T) {
-		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource(mysqlMigrationsFolder))
+		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -415,7 +423,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
-		m, err := NewMigrator(db.DriverName(), db.DB, UseLocalFolderSource(mysqlMigrationsFolder))
+		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
 		defer m.Close()
 
@@ -503,7 +511,7 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			),
 		)
 
-		m, err := NewMigrator(db.DriverName(), db.DB, source)
+		m, err := NewMigrator(UseMySQL(db.DB), source)
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -590,13 +598,10 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			),
 		)
 
-		connectOptions := WithConnectOptions(&database.ConnectOptions{
-			MaxTimeout: time.Second,
-			MaxAttempts: 1,
-			Step: 0 * time.Second,
-		})
-
-		m, err := NewMigrator(db.DriverName(), db.DB, source, connectOptions)
+		m, err := NewMigrator(
+			UseMySQL(db.DB, WithMySQLMaxConnectionAttempts(1), WithMySQLConnectionTimeout(time.Second)),
+			source,
+		)
 		assert.NoError(t, err)
 
 		defer m.Close()
@@ -683,12 +688,6 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			),
 		)
 
-		mysqlConfig := WithMysqlConfig("migration_versions", "foo", 10,  &database.ConnectOptions{
-			MaxTimeout: 3 * time.Second,
-			MaxAttempts: 10,
-			Step: 1 * time.Second,
-		})
-
 		sg, err := database.CreateServiceGateway(db.DriverName(), db.DB, "migration_versions")
 		if err != nil {
 			t.Fatal(err)
@@ -696,7 +695,16 @@ func TestInMemorySourceMigrations(t *testing.T) {
 
 		defer sg.Close()
 
-		m, err := NewMigrator(db.DriverName(), db.DB, source, mysqlConfig)
+		m, err := NewMigrator(
+			UseMySQL(
+				db.DB,
+				WithMySQLMigrationTable("migration_versions"),
+				WithMySQLMaxConnectionAttempts(10),
+				WithMySQLConnectionTimeout(3 * time.Second),
+			),
+			source,
+		)
+
 		assert.NoError(t, err)
 
 		defer m.Close()

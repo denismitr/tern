@@ -19,6 +19,18 @@ const (
 	operationRefresh  = "refresh"
 )
 
+type migrateFunc func(ctx context.Context, tx *sql.Tx, migration *migration.Migration, insertQuery string) error
+type rollbackFunc func(ctx context.Context, tx *sql.Tx, migration *migration.Migration, removeVersionQuery string) error
+
+type handlers struct {
+	migrate         migrateFunc
+	rollback        rollbackFunc
+}
+
+type Plan struct {
+	Steps int
+}
+
 type ServiceGateway interface {
 	io.Closer
 
@@ -43,7 +55,7 @@ func CreateGateway(driver string, db *sql.DB, migrationsTable string, connectOpt
 
 	switch driver {
 	case "mysql":
-		return NewMysqlGateway(db, connector, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
+		return NewMySQLGateway(db, connector, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
@@ -56,15 +68,15 @@ func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (Se
 
 	switch driver {
 	case "mysql":
-		return NewMysqlGateway(db, connector, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
+		return NewMySQLGateway(db, connector, migrationsTable, MysqlDefaultLockKey, MysqlDefaultLockSeconds)
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
 }
 
-func up(ctx context.Context, tx *sql.Tx, migration *migration.Migration, insertQuery string) error {
+func migrate(ctx context.Context, tx *sql.Tx, migration *migration.Migration, insertQuery string) error {
 	if _, err := tx.ExecContext(ctx, migration.MigrateScripts()); err != nil {
-		return errors.Wrapf(err, "could not execute up migration [%s]", migration.Key)
+		return errors.Wrapf(err, "could not execute migrate migration [%s]", migration.Key)
 	}
 
 	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version.Timestamp, migration.Name); err != nil {
@@ -79,9 +91,9 @@ func up(ctx context.Context, tx *sql.Tx, migration *migration.Migration, insertQ
 	return nil
 }
 
-func down(ctx context.Context, tx *sql.Tx, migration *migration.Migration, removeVersionQuery string) error {
+func rollback(ctx context.Context, tx *sql.Tx, migration *migration.Migration, removeVersionQuery string) error {
 	if _, err := tx.ExecContext(ctx, migration.RollbackScripts()); err != nil {
-		return errors.Wrapf(err, "could not execute down migration %s", migration.Key)
+		return errors.Wrapf(err, "could not execute rollback migration %s", migration.Key)
 	}
 
 	if _, err := tx.ExecContext(ctx, removeVersionQuery, migration.Version.Timestamp); err != nil {

@@ -22,7 +22,7 @@ func Test_MySQLGateway_CanBeCreatedFromDriver(t *testing.T) {
 
 	defer gateway.Close()
 
-	_, ok := gateway.(*MySQL)
+	_, ok := gateway.(*MySQLGateway)
 	assert.True(t, ok, "should be a value of mysqlGateway")
 }
 

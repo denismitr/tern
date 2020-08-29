@@ -22,10 +22,6 @@ const MysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
 const MysqlDefaultLockKey = "tern_migrations"
 const MysqlDefaultLockSeconds = 3
 
-type Plan struct {
-	Steps int
-}
-
 type mySQLLocker struct {
 	lockKey string
 	lockFor int
@@ -47,15 +43,46 @@ func (g *mySQLLocker) unlock(ctx context.Context, conn *sql.Conn) error {
 	return nil
 }
 
-type MySQL struct {
+type MySQLGateway struct {
+	handlers
+
 	db              *sql.DB
 	conn            *sql.Conn
 	migrationsTable string
 	locker          locker
 }
 
+var _ Gateway = (*MySQLGateway)(nil)
+var _ ServiceGateway = (*MySQLGateway)(nil)
+
+// NewMySQLGateway - creates a new MySQL gateway and uses the connector interface to attempt to
+// connect to the MySQL database
+func NewMySQLGateway(db *sql.DB, connector connector, tableName, lockKey string, lockFor int) (*MySQLGateway, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), connector.timeout())
+	defer cancel()
+
+	conn, err := connector.connect(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	return &MySQLGateway{
+		db:              db,
+		conn:            conn,
+		handlers: handlers{
+			migrate:  migrate,
+			rollback: rollback,
+		},
+		migrationsTable: tableName,
+		locker: &mySQLLocker{
+			lockKey: lockKey,
+			lockFor: lockFor,
+		},
+	}, nil
+}
+
 // Close the connection
-func (g *MySQL) Close() error {
+func (g *MySQLGateway) Close() error {
 	if g.conn != nil {
 		return g.conn.Close()
 	}
@@ -63,7 +90,7 @@ func (g *MySQL) Close() error {
 	return nil
 }
 
-func (g *MySQL) Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
+func (g *MySQLGateway) Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	var migrated migration.Migrations
 
 	if err := g.execUnderLock(ctx, operationMigrate, func(tx *sql.Tx, versions []migration.Version) error {
@@ -85,7 +112,7 @@ func (g *MySQL) Migrate(ctx context.Context, migrations migration.Migrations, p 
 		}
 
 		for i := range scheduled {
-			if err := up(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
+			if err := g.migrate(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
 				return err
 			}
 
@@ -100,14 +127,14 @@ func (g *MySQL) Migrate(ctx context.Context, migrations migration.Migrations, p 
 	return migrated, nil
 }
 
-func (g *MySQL) Rollback(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
+func (g *MySQLGateway) Rollback(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
 	var executed migration.Migrations
 
 	if err := g.execUnderLock(ctx, operationRollback, func(tx *sql.Tx, versions []migration.Version) error {
 		deleteVersionQuery := g.createDeleteVersionQuery()
 
 		var scheduled migration.Migrations
-		for i := len(migrations) - 1; i >= 0; i--  {
+		for i := len(migrations) - 1; i >= 0; i-- {
 			if inVersions(migrations[i].Version, versions) {
 				if p.Steps != 0 && len(scheduled) >= p.Steps {
 					break
@@ -122,7 +149,7 @@ func (g *MySQL) Rollback(ctx context.Context, migrations migration.Migrations, p
 		}
 
 		for i := range scheduled {
-			if err := down(ctx, tx, scheduled[i], deleteVersionQuery); err != nil {
+			if err := g.rollback(ctx, tx, scheduled[i], deleteVersionQuery); err != nil {
 				return err
 			}
 
@@ -137,7 +164,7 @@ func (g *MySQL) Rollback(ctx context.Context, migrations migration.Migrations, p
 	return executed, nil
 }
 
-func (g *MySQL) Refresh(
+func (g *MySQLGateway) Refresh(
 	ctx context.Context,
 	migrations migration.Migrations,
 	plan Plan,
@@ -151,7 +178,7 @@ func (g *MySQL) Refresh(
 
 		for i := len(migrations) - 1; i >= 0; i-- {
 			if inVersions(migrations[i].Version, versions) {
-				if err := down(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
+				if err := g.rollback(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
 					return err
 				}
 
@@ -160,7 +187,7 @@ func (g *MySQL) Refresh(
 		}
 
 		for i := range migrations {
-			if err := up(ctx, tx, migrations[i], insertVersionQuery); err != nil {
+			if err := g.migrate(ctx, tx, migrations[i], insertVersionQuery); err != nil {
 				return err
 			}
 
@@ -175,7 +202,7 @@ func (g *MySQL) Refresh(
 	return rolledBack, migrated, nil
 }
 
-func (g *MySQL) ReadVersions(ctx context.Context) ([]migration.Version, error) {
+func (g *MySQLGateway) ReadVersions(ctx context.Context) ([]migration.Version, error) {
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -194,35 +221,15 @@ func (g *MySQL) ReadVersions(ctx context.Context) ([]migration.Version, error) {
 	return result, nil
 }
 
-func NewMysqlGateway(db *sql.DB, connector connector, tableName, lockKey string, lockFor int) (*MySQL, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), connector.timeout())
-	defer cancel()
-
-	conn, err := connector.connect(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	return &MySQL{
-		db:              db,
-		conn:            conn,
-		migrationsTable: tableName,
-		locker: &mySQLLocker{
-			lockKey: lockKey,
-			lockFor: lockFor,
-		},
-	}, nil
-}
-
-func (g *MySQL) createDeleteVersionQuery() string {
+func (g *MySQLGateway) createDeleteVersionQuery() string {
 	return fmt.Sprintf("DELETE FROM %s WHERE version = ?;", g.migrationsTable)
 }
 
-func (g *MySQL) createInsertVersionsQuery() string {
+func (g *MySQLGateway) createInsertVersionsQuery() string {
 	return fmt.Sprintf("INSERT INTO %s (version, name) VALUES (?, ?);", g.migrationsTable)
 }
 
-func (g *MySQL) CreateMigrationsTable(ctx context.Context) error {
+func (g *MySQLGateway) CreateMigrationsTable(ctx context.Context) error {
 	if _, err := g.conn.ExecContext(ctx, fmt.Sprintf(mysqlCreateMigrationsSchema, g.migrationsTable)); err != nil {
 		return err
 	}
@@ -230,7 +237,7 @@ func (g *MySQL) CreateMigrationsTable(ctx context.Context) error {
 	return nil
 }
 
-func (g *MySQL) DropMigrationsTable(ctx context.Context) error {
+func (g *MySQLGateway) DropMigrationsTable(ctx context.Context) error {
 	if _, err := g.conn.ExecContext(ctx, fmt.Sprintf(MysqlDropMigrationsSchema, g.migrationsTable)); err != nil {
 		return err
 	}
@@ -238,7 +245,7 @@ func (g *MySQL) DropMigrationsTable(ctx context.Context) error {
 	return nil
 }
 
-func (g *MySQL) WriteVersions(ctx context.Context, migrations migration.Migrations) error {
+func (g *MySQLGateway) WriteVersions(ctx context.Context, migrations migration.Migrations) error {
 	query := g.createInsertVersionsQuery()
 
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
@@ -258,7 +265,7 @@ func (g *MySQL) WriteVersions(ctx context.Context, migrations migration.Migratio
 	return tx.Commit()
 }
 
-func (g *MySQL) ShowTables(ctx context.Context) ([]string, error) {
+func (g *MySQLGateway) ShowTables(ctx context.Context) ([]string, error) {
 	rows, err := g.conn.QueryContext(ctx, "SHOW TABLES;")
 	if err != nil {
 		return nil, errors.Wrap(err, "could not list all tables")
@@ -308,7 +315,7 @@ func inVersions(version migration.Version, versions []migration.Version) bool {
 	return false
 }
 
-func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []migration.Version) error) error {
+func (g *MySQLGateway) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []migration.Version) error) error {
 	if err := g.locker.lock(ctx, g.conn); err != nil {
 		return errors.Wrap(err, "mysql lock failed")
 	}
@@ -319,13 +326,13 @@ func (g *MySQL) execUnderLock(ctx context.Context, operation string, f func(*sql
 		var result = err
 
 		if tx != nil {
-			rollbackErr = tx.Rollback();
+			rollbackErr = tx.Rollback()
 			if rollbackErr != nil {
 				result = errors.Wrapf(result, rollbackErr.Error())
 			}
 		}
 
-		unlockErr = g.locker.unlock(ctx, g.conn);
+		unlockErr = g.locker.unlock(ctx, g.conn)
 		if unlockErr != nil {
 			result = errors.Wrapf(result, unlockErr.Error())
 		}

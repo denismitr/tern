@@ -33,7 +33,7 @@ func UseInMemorySource(migrations ...*migration.Migration) OptionFunc {
 func WithMysqlConfig(migrationsTable, lockKey string, lockFor int, connectOptions *database.ConnectOptions) OptionFunc {
 	return func(m *Migrator, driver string, db *sql.DB) error {
 		connector := database.MakeRetryingConnector(connectOptions)
-		gateway, err := database.NewMysqlGateway(db, connector, migrationsTable, lockKey, lockFor)
+		gateway, err := database.NewMySQLGateway(db, connector, migrationsTable, lockKey, lockFor)
 		if err != nil {
 			return err
 		}

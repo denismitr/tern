@@ -93,6 +93,8 @@ func Test_ConvertLocalFolder(t *testing.T) {
 }
 
 func Test_VersionCanBeExtractedFromKey(t *testing.T) {
+	t.Parallel()
+
 	valid := []struct {
 		in  string
 		out string
@@ -123,6 +125,8 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 	assert.NoError(t, err)
 
 	for _, tc := range valid {
+		tc := tc
+
 		t.Run(fmt.Sprintf("valid-timestanps-%s", tc.in), func(t *testing.T) {
 			out, err := c.extractVersionFromKey(tc.in)
 			assert.NoError(t, err)
@@ -131,6 +135,8 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 	}
 
 	for _, tc := range invalid {
+		tc := tc
+
 		t.Run(fmt.Sprintf("invalid-timestanps-%s", tc.in), func(t *testing.T) {
 			out, err := c.extractVersionFromKey(tc.in)
 			assert.Error(t, err)
@@ -141,6 +147,8 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 }
 
 func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
+	t.Parallel()
+
 	tt := []struct {
 		in  string
 		out string
@@ -162,6 +170,7 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 	assert.NoError(t, err)
 
 	for _, tc := range tt {
+		tc := tc
 		t.Run(fmt.Sprintf("valid-timestanps-%s", tc.in), func(t *testing.T) {
 			out := c.extractNameFromKey(tc.in)
 			assert.Equal(t, tc.out, out)
@@ -170,6 +179,8 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 }
 
 func Test_ConvertPathToKey(t *testing.T) {
+	t.Parallel()
+
 	valid := []struct{
 		in string
 		out string
@@ -193,6 +204,8 @@ func Test_ConvertPathToKey(t *testing.T) {
 	}
 
 	for _, tc := range valid {
+		tc := tc
+
 		t.Run(tc.in, func(t *testing.T) {
 			out, err := convertLocalFilePathToKey(tc.in)
 			assert.NoError(t, err)
@@ -201,6 +214,8 @@ func Test_ConvertPathToKey(t *testing.T) {
 	}
 
 	for _, tc := range invalid {
+		tc := tc
+
 		t.Run(tc.in, func(t *testing.T) {
 			out, err := convertLocalFilePathToKey(tc.in)
 			assert.Error(t, err)

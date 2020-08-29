@@ -12,5 +12,9 @@ down:
 	docker-compose down
 	docker-compose rm --force --stop -v
 
+test:
+	@echo Starting tests
+	$(GOTEST)
 test/cover:
+	@echo Starting tests with coverage
 	$(GOTEST) -cover -coverpkg=./... -coverprofile=$(COVEROUT) . && $(GOCOVER) -html=$(COVEROUT)

@@ -3,6 +3,7 @@ package tern
 import (
 	"database/sql"
 	"github.com/denismitr/tern/database"
+	"github.com/denismitr/tern/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/denismitr/tern/source"
 	"time"
@@ -57,6 +58,13 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 
 		m.gateway = gateway
 
+		return nil
+	}
+}
+
+func UseLogger(p logger.Printer, printSql, printDebug bool) OptionFunc {
+	return func(m *Migrator) error {
+		m.lg = logger.New(p, printSql, printDebug)
 		return nil
 	}
 }

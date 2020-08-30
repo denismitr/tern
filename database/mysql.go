@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/denismitr/tern/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
 	"time"
@@ -26,8 +27,8 @@ const mysqlInsertVersionQuery = "INSERT INTO %s (version, name) VALUES (?, ?);"
 
 type MySQLOptions struct {
 	CommonOptions
-	LockKey        string
-	LockFor        int
+	LockKey string
+	LockFor int
 }
 
 type mySQLLocker struct {
@@ -56,6 +57,7 @@ type MySQLGateway struct {
 
 	db              *sql.DB
 	conn            *sql.Conn
+	lg              logger.Logger
 	migrationsTable string
 	locker          locker
 }
@@ -75,12 +77,13 @@ func NewMySQLGateway(db *sql.DB, connector connector, options *MySQLOptions) (*M
 	}
 
 	return &MySQLGateway{
-		db:              db,
-		conn:            conn,
+		db:   db,
+		conn: conn,
 		handlers: handlers{
 			migrate:  migrate,
 			rollback: rollback,
 		},
+		lg: &logger.NullLogger{},
 		migrationsTable: options.MigrationsTable,
 		locker: &mySQLLocker{
 			lockKey: options.LockKey,
@@ -96,6 +99,10 @@ func (g *MySQLGateway) Close() error {
 	}
 
 	return nil
+}
+
+func (g *MySQLGateway) SetLogger(lg logger.Logger) {
+	g.lg = lg
 }
 
 func (g *MySQLGateway) Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error) {
@@ -120,9 +127,11 @@ func (g *MySQLGateway) Migrate(ctx context.Context, migrations migration.Migrati
 		}
 
 		for i := range scheduled {
-			if err := g.migrate(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
+			if err := g.migrate(ctx, tx, g.lg, scheduled[i], insertVersionQuery); err != nil {
 				return err
 			}
+
+			g.lg.Successf("migrated: %s", scheduled[i].Key)
 
 			migrated = append(migrated, scheduled[i])
 		}
@@ -157,9 +166,12 @@ func (g *MySQLGateway) Rollback(ctx context.Context, migrations migration.Migrat
 		}
 
 		for i := range scheduled {
-			if err := g.rollback(ctx, tx, scheduled[i], deleteVersionQuery); err != nil {
+			g.lg.Debugf("rolling back: %s", scheduled[i])
+			if err := g.rollback(ctx, tx, g.lg, scheduled[i], deleteVersionQuery); err != nil {
 				return err
 			}
+
+			g.lg.Successf("rolled back: %s", scheduled[i].Key)
 
 			executed = append(executed, scheduled[i])
 		}
@@ -186,7 +198,7 @@ func (g *MySQLGateway) Refresh(
 
 		for i := len(migrations) - 1; i >= 0; i-- {
 			if inVersions(migrations[i].Version, versions) {
-				if err := g.rollback(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
+				if err := g.rollback(ctx, tx, g.lg, migrations[i], deleteVersionQuery); err != nil {
 					return err
 				}
 
@@ -195,7 +207,7 @@ func (g *MySQLGateway) Refresh(
 		}
 
 		for i := range migrations {
-			if err := g.migrate(ctx, tx, migrations[i], insertVersionQuery); err != nil {
+			if err := g.migrate(ctx, tx, g.lg, migrations[i], insertVersionQuery); err != nil {
 				return err
 			}
 

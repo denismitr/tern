@@ -3,6 +3,7 @@ package tern
 import (
 	"context"
 	"github.com/denismitr/tern/database"
+	"github.com/denismitr/tern/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/denismitr/tern/source"
 	"github.com/pkg/errors"
@@ -11,6 +12,7 @@ import (
 var ErrGatewayNotInitialized = errors.New("database gateway has not been initialized")
 
 type Migrator struct {
+	lg             logger.Logger
 	gateway        database.Gateway
 	converter      source.Selector
 	connectOptions *database.ConnectOptions
@@ -35,11 +37,17 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, error) {
 	// Default converter implementation
 	if m.converter == nil {
 		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder)
-		if err != nil  {
+		if err != nil {
 			return nil, err
 		}
 		m.converter = localFsConverter
 	}
+
+	if m.lg == nil {
+		m.lg = &logger.NullLogger{}
+	}
+
+	m.gateway.SetLogger(m.lg)
 
 	return m, nil
 }
@@ -54,12 +62,14 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 
 	migrations, err := m.converter.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
+		m.lg.Error(err)
 		return nil, err
 	}
 
 	p := database.Plan{Steps: act.steps}
 	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
+		m.lg.Error(err)
 		return nil, err
 	}
 
@@ -76,11 +86,13 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 
 	migrations, err := m.converter.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
+		m.lg.Error(err)
 		return nil, errors.Wrap(err, "could not rollback migrations")
 	}
 
-	executed, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps});
+	executed, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps})
 	if err != nil {
+		m.lg.Error(err)
 		return nil, errors.Wrap(err, "could not rollback migrations")
 	}
 
@@ -106,11 +118,13 @@ func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migr
 
 	migrations, err := m.converter.Select(ctx, source.Filter{})
 	if err != nil {
+		m.lg.Error(err)
 		return nil, nil, err
 	}
 
-	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{});
+	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{})
 	if err != nil {
+		m.lg.Error(err)
 		return nil, nil, err
 	}
 

@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"github.com/denismitr/tern/logger"
 	"github.com/denismitr/tern/migration"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -24,8 +25,8 @@ type CommonOptions struct {
 	MigrationsTable string
 }
 
-type migrateFunc func(ctx context.Context, ex ctxExecutor, migration *migration.Migration, insertQuery string) error
-type rollbackFunc func(ctx context.Context, ex ctxExecutor, migration *migration.Migration, removeVersionQuery string) error
+type migrateFunc func(ctx context.Context, ex ctxExecutor, lg logger.Logger, migration *migration.Migration, insertQuery string) error
+type rollbackFunc func(ctx context.Context, ex ctxExecutor, lg logger.Logger, migration *migration.Migration, removeVersionQuery string) error
 
 type handlers struct {
 	migrate         migrateFunc
@@ -53,6 +54,8 @@ type ServiceGateway interface {
 type Gateway interface {
 	io.Closer
 
+	SetLogger(logger.Logger)
+
 	Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
 	Rollback(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
 	Refresh(ctx context.Context, migrations migration.Migrations, plan Plan) (migration.Migrations, migration.Migrations, error)
@@ -78,14 +81,18 @@ func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (Se
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
 }
 
-func migrate(ctx context.Context, tx ctxExecutor, migration *migration.Migration, insertQuery string) error {
+func migrate(ctx context.Context, tx ctxExecutor, lg logger.Logger, migration *migration.Migration, insertQuery string) error {
 	if migration.Version.Timestamp == "" {
 		return ErrMigrationVersionNotSpecified
 	}
 
+	lg.SQL(migration.MigrateScripts())
+
 	if _, err := tx.ExecContext(ctx, migration.MigrateScripts()); err != nil {
 		return errors.Wrapf(err, "could not run migration [%s]", migration.Key)
 	}
+
+	lg.SQL(insertQuery, migration.Version.Timestamp, migration.Name)
 
 	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version.Timestamp, migration.Name); err != nil {
 		return errors.Wrapf(
@@ -98,14 +105,18 @@ func migrate(ctx context.Context, tx ctxExecutor, migration *migration.Migration
 	return nil
 }
 
-func rollback(ctx context.Context, ex ctxExecutor, migration *migration.Migration, removeVersionQuery string) error {
+func rollback(ctx context.Context, ex ctxExecutor, lg logger.Logger, migration *migration.Migration, removeVersionQuery string) error {
 	if migration.Version.Timestamp == "" {
 		return ErrMigrationVersionNotSpecified
 	}
 
+	lg.SQL(migration.RollbackScripts())
+
 	if _, err := ex.ExecContext(ctx, migration.RollbackScripts()); err != nil {
 		return errors.Wrapf(err, "could not rollback migration [%s]", migration.Key)
 	}
+
+	lg.SQL(removeVersionQuery, migration.Version.Timestamp)
 
 	if _, err := ex.ExecContext(ctx, removeVersionQuery, migration.Version.Timestamp); err != nil {
 		return errors.Wrapf(

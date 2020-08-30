@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/denismitr/tern/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -52,6 +53,8 @@ func Test_MigrateAndRollback_Funcs(t *testing.T) {
 	versionDeletionQuery := fmt.Sprintf(mysqlDeleteVersionQuery, DefaultMigrationsTable)
 	versionInsertionQuery := fmt.Sprintf(mysqlInsertVersionQuery, DefaultMigrationsTable)
 
+	lg := &logger.NullLogger{}
+
 	t.Run("it will process valid migration with success", func(t *testing.T) {
 		ex := newCtxExecutorMock()
 
@@ -64,7 +67,7 @@ func Test_MigrateAndRollback_Funcs(t *testing.T) {
 
 		ctx := context.Background()
 
-		if err := migrate(ctx, ex, m, versionInsertionQuery); err != nil {
+		if err := migrate(ctx, ex, lg, m, versionInsertionQuery); err != nil {
 			t.Fatal(err)
 		}
 
@@ -90,7 +93,7 @@ func Test_MigrateAndRollback_Funcs(t *testing.T) {
 
 		ctx := context.Background()
 
-		if err := migrate(ctx, ex, m, versionInsertionQuery); err == nil {
+		if err := migrate(ctx, ex, lg, m, versionInsertionQuery); err == nil {
 			t.Fatal(err)
 		} else {
 			assert.Equal(t, "could not run migration [1596897167_create_foo_table]: FOO migration failed", err.Error())
@@ -109,7 +112,7 @@ func Test_MigrateAndRollback_Funcs(t *testing.T) {
 
 		ctx := context.Background()
 
-		if err := migrate(ctx, ex, m, versionInsertionQuery); err == nil {
+		if err := migrate(ctx, ex, lg, m, versionInsertionQuery); err == nil {
 			t.Fatal(err)
 		} else {
 			assert.Equal(t, "could not insert migration version [1596897167]: unique constraint violation", err.Error())
@@ -127,7 +130,7 @@ func Test_MigrateAndRollback_Funcs(t *testing.T) {
 		)
 
 		ctx := context.Background()
-		if err := rollback(ctx, ex, m, versionDeletionQuery); err != nil {
+		if err := rollback(ctx, ex, lg, m, versionDeletionQuery); err != nil {
 			t.Fatal(err)
 		}
 
@@ -153,7 +156,7 @@ func Test_MigrateAndRollback_Funcs(t *testing.T) {
 
 		ctx := context.Background()
 
-		if err := rollback(ctx, ex, m, versionDeletionQuery); err == nil {
+		if err := rollback(ctx, ex, lg, m, versionDeletionQuery); err == nil {
 			t.Fatal(err)
 		} else {
 			assert.Equal(t, "could not rollback migration [1596897167_create_foo_table]: FOO rollback failed", err.Error())
@@ -172,7 +175,7 @@ func Test_MigrateAndRollback_Funcs(t *testing.T) {
 
 		ctx := context.Background()
 
-		if err := rollback(ctx, ex, m, versionDeletionQuery); err == nil {
+		if err := rollback(ctx, ex, lg, m, versionDeletionQuery); err == nil {
 			t.Fatal(err)
 		} else {
 			assert.Equal(t, "could not remove migration version [1596897167]: version not found", err.Error())

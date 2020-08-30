@@ -166,7 +166,7 @@ func (g *MySQLGateway) Rollback(ctx context.Context, migrations migration.Migrat
 		}
 
 		for i := range scheduled {
-			g.lg.Debugf("rolling back: %s", scheduled[i])
+			g.lg.Debugf("rolling back: %s", scheduled[i].Key)
 			if err := g.rollback(ctx, tx, g.lg, scheduled[i], deleteVersionQuery); err != nil {
 				return err
 			}

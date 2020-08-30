@@ -69,7 +69,10 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 	p := database.Plan{Steps: act.steps}
 	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
-		m.lg.Error(err)
+		if ! errors.Is(err, database.ErrNothingToMigrate) {
+			m.lg.Error(err)
+		}
+
 		return nil, err
 	}
 

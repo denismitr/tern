@@ -9,5 +9,6 @@ require (
 	github.com/mattn/go-sqlite3 v1.9.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.6.1
+	github.com/xo/dburl v0.0.0-20200727080105-4a02649c2fea // indirect
 	google.golang.org/appengine v1.6.6 // indirect
 )

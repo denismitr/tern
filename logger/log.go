@@ -66,6 +66,6 @@ func (c ColoredLogger) SQL(query string, args ...interface{}) {
 			}
 		}
 
-		_ = log.Output(2, aurora.Gray(5, buf.String()).String())
+		_ = log.Output(2, aurora.Gray(15, buf.String()).String())
 	}
 }

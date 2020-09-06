@@ -51,8 +51,8 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 			oFunc(mysqlOpts, connectOpts)
 		}
 
-		connector := database.MakeRetryingConnector(connectOpts)
-		gateway, err := database.NewMySQLGateway(db, connector, mysqlOpts)
+		connector := database.MakeRetryingConnector(db, connectOpts)
+		gateway, err := database.NewMySQLGateway(connector, mysqlOpts)
 		if err != nil {
 			return err
 		}
@@ -77,8 +77,8 @@ func UseSqlite(db *sql.DB, options ...SqliteOptionFunc) OptionFunc {
 			oFunc(sqliteOpts, connectOpts)
 		}
 
-		connector := database.MakeRetryingConnector(connectOpts)
-		gateway, err := database.NewSqliteGateway(db, connector, sqliteOpts)
+		connector := database.MakeRetryingConnector(db, connectOpts)
+		gateway, err := database.NewSqliteGateway(connector, sqliteOpts)
 		if err != nil {
 			return err
 		}

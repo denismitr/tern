@@ -22,11 +22,12 @@ func Test_MigratorCanBeInstantiated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer db.Close()
-
-	m, err := NewMigrator(UseMySQL(db.DB))
+	m, closer, err := NewMigrator(UseMySQL(db.DB))
 	assert.NoError(t, err)
 	assert.NotNil(t, m)
+	assert.NoError(t, closer())
+
+	db.Close()
 }
 
 func Test_Tern_WithMySQL(t *testing.T) {
@@ -45,13 +46,15 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	defer gateway.Close()
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
-		m, err := NewMigrator(
+		m, closer, err := NewMigrator(
 			UseMySQL(db.DB),
 			UseLocalFolderSource(mysqlMigrationsFolder),
 		)
 
 		assert.NoError(t, err)
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
 		defer cancel()
@@ -134,9 +137,11 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		keys, err := m.Migrate(ctx)
 		assert.NoError(t, err)
@@ -207,9 +212,11 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		keys, err := m.Migrate(ctx)
 		assert.True(t, errors.Is(err, database.ErrNothingToMigrate))
@@ -254,10 +261,12 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("run_single_migration_when_step_is_one", func(t *testing.T) {
-		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
 
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
@@ -306,14 +315,16 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_migrate_a_single_file", func(t *testing.T) {
-		m, err := NewMigrator(
+		m, closer, err := NewMigrator(
 			UseMySQL(db.DB),
 			UseLocalFolderSource(mysqlMigrationsFolder),
 		)
 
 		assert.NoError(t, err)
 
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
@@ -360,10 +371,12 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_refresh_all_migrations", func(t *testing.T) {
-		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
 
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
@@ -423,9 +436,11 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
-		m, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
 		assert.NoError(t, err)
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
 		defer cancel()
@@ -511,10 +526,12 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			),
 		)
 
-		m, err := NewMigrator(UseMySQL(db.DB), source)
+		m, closer, err := NewMigrator(UseMySQL(db.DB), source)
 		assert.NoError(t, err)
 
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
 		defer cancel()
@@ -598,13 +615,15 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			),
 		)
 
-		m, err := NewMigrator(
+		m, closer, err := NewMigrator(
 			UseMySQL(db.DB, WithMySQLMaxConnectionAttempts(1), WithMySQLConnectionTimeout(time.Second)),
 			source,
 		)
 		assert.NoError(t, err)
 
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
 		defer cancel()
@@ -695,7 +714,7 @@ func TestInMemorySourceMigrations(t *testing.T) {
 
 		defer sg.Close()
 
-		m, err := NewMigrator(
+		m, closer, err := NewMigrator(
 			UseMySQL(
 				db.DB,
 				WithMySQLMigrationTable("migration_versions"),
@@ -709,7 +728,9 @@ func TestInMemorySourceMigrations(t *testing.T) {
 
 		assert.NoError(t, err)
 
-		defer m.Close()
+		defer func() {
+			assert.NoError(t, closer())
+		}()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
 		defer cancel()

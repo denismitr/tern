@@ -11,6 +11,8 @@ import (
 
 var ErrGatewayNotInitialized = errors.New("database gateway has not been initialized")
 
+type CloserFunc func() error
+
 type Migrator struct {
 	lg             logger.Logger
 	gateway        database.Gateway
@@ -21,25 +23,30 @@ type Migrator struct {
 // NewMigrator creates a migrator using the sql.DB and option callbacks
 // to customize the newly created configurator, when no custom options
 // are required a number of defaults will be applied
-func NewMigrator(opts ...OptionFunc) (*Migrator, error) {
+func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 	m := new(Migrator)
 
 	for _, oFunc := range opts {
 		if err := oFunc(m); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	if m.gateway == nil {
-		return nil, ErrGatewayNotInitialized
+		return nil, nil, ErrGatewayNotInitialized
 	}
 
 	// Default converter implementation
 	if m.converter == nil {
 		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder)
-		if err != nil {
-			return nil, err
+		if gatewayErr := m.gateway.Close(); gatewayErr != nil {
+			return nil, nil, errors.Wrap(err, gatewayErr.Error())
 		}
+
+		if err != nil {
+			return nil, nil, err
+		}
+
 		m.converter = localFsConverter
 	}
 
@@ -49,7 +56,11 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, error) {
 
 	m.gateway.SetLogger(m.lg)
 
-	return m, nil
+	closer := func() error {
+		return m.close()
+	}
+
+	return m, closer, nil
 }
 
 // Migrate the migrations using action configurator callbacks to customize
@@ -103,12 +114,16 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 }
 
 // Close the migrator
-func (m *Migrator) Close() error {
+func (m *Migrator) close() error {
 	if m.gateway == nil {
 		return ErrGatewayNotInitialized
 	}
 
-	return m.gateway.Close()
+	if err := m.gateway.Close(); err != nil {
+		m.lg.Error(err)
+	}
+
+	return nil
 }
 
 // Refresh first rollbacks the migrations and then migrates them again

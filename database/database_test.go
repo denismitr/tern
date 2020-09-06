@@ -8,6 +8,8 @@ import (
 	"github.com/denismitr/tern/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/stretchr/testify/assert"
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/mattn/go-sqlite3"
 	"testing"
 )
 

@@ -7,23 +7,24 @@ import (
 	"github.com/denismitr/tern/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
-	"time"
 )
 
-const mysqlCreateMigrationsSchema = `
-CREATE TABLE IF NOT EXISTS %s (
-	version VARCHAR(13) PRIMARY KEY,
-	name VARCHAR(255),
-	created_at TIMESTAMP default CURRENT_TIMESTAMP
-) ENGINE=INNODB;	
-`
+const (
+	mysqlCreateMigrationsSchema = `
+		CREATE TABLE IF NOT EXISTS %s (
+			version VARCHAR(13) PRIMARY KEY,
+			name VARCHAR(255),
+			created_at TIMESTAMP default CURRENT_TIMESTAMP
+		) ENGINE=INNODB;	
+	`
+	mysqlDeleteVersionQuery = "DELETE FROM %s WHERE version = ?;"
+	MysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
+	mysqlInsertVersionQuery = "INSERT INTO %s (version, name) VALUES (?, ?);"
+)
 
-const DefaultMigrationsTable = "migrations"
-const MysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
+
 const MysqlDefaultLockKey = "tern_migrations"
 const MysqlDefaultLockSeconds = 3
-const mysqlDeleteVersionQuery = "DELETE FROM %s WHERE version = ?;"
-const mysqlInsertVersionQuery = "INSERT INTO %s (version, name) VALUES (?, ?);"
 
 type MySQLOptions struct {
 	CommonOptions
@@ -302,37 +303,6 @@ func (g *MySQLGateway) ShowTables(ctx context.Context) ([]string, error) {
 	}
 
 	return result, err
-}
-
-func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, error) {
-	rows, err := tx.Query(fmt.Sprintf("SELECT version, created_at FROM %s", migrationsTable))
-	if err != nil {
-		return nil, err
-	}
-
-	var result []migration.Version
-
-	for rows.Next() {
-		var timestamp string
-		var createdAt time.Time
-		if err := rows.Scan(&timestamp, &createdAt); err != nil {
-			rows.Close()
-			return result, err
-		}
-		result = append(result, migration.Version{Timestamp: timestamp, CreatedAt: createdAt})
-	}
-
-	return result, nil
-}
-
-func inVersions(version migration.Version, versions []migration.Version) bool {
-	for _, v := range versions {
-		if v.Timestamp == version.Timestamp {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (g *MySQLGateway) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []migration.Version) error) error {

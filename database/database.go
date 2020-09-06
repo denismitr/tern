@@ -3,12 +3,12 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/denismitr/tern/logger"
 	"github.com/denismitr/tern/migration"
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"io"
+	"time"
 )
 
 var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
@@ -16,6 +16,8 @@ var ErrNothingToMigrate = errors.New("nothing to migrate")
 var ErrMigrationVersionNotSpecified = errors.New("migration version not specified")
 
 const (
+	DefaultMigrationsTable = "migrations"
+
 	operationRollback = "rollback"
 	operationMigrate  = "migrate"
 	operationRefresh  = "refresh"
@@ -29,8 +31,8 @@ type migrateFunc func(ctx context.Context, ex ctxExecutor, lg logger.Logger, mig
 type rollbackFunc func(ctx context.Context, ex ctxExecutor, lg logger.Logger, migration *migration.Migration, removeVersionQuery string) error
 
 type handlers struct {
-	migrate         migrateFunc
-	rollback        rollbackFunc
+	migrate  migrateFunc
+	rollback rollbackFunc
 }
 
 type ctxExecutor interface {
@@ -76,6 +78,13 @@ func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (Se
 				LockFor: MysqlDefaultLockSeconds,
 				LockKey: MysqlDefaultLockKey,
 			})
+	case "sqlite":
+		return NewSqliteGateway(db, connector,
+			&SqliteOptions{
+		CommonOptions{
+				MigrationsTable: migrationsTable,
+			},
+		})
 	}
 
 	return nil, errors.Wrapf(ErrUnsupportedDBDriver, "%s is not supported by Tern library", driver)
@@ -127,4 +136,35 @@ func rollback(ctx context.Context, ex ctxExecutor, lg logger.Logger, migration *
 	}
 
 	return nil
+}
+
+func inVersions(version migration.Version, versions []migration.Version) bool {
+	for _, v := range versions {
+		if v.Timestamp == version.Timestamp {
+			return true
+		}
+	}
+
+	return false
+}
+
+func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, error) {
+	rows, err := tx.Query(fmt.Sprintf("SELECT version, created_at FROM %s", migrationsTable))
+	if err != nil {
+		return nil, err
+	}
+
+	var result []migration.Version
+
+	for rows.Next() {
+		var timestamp string
+		var createdAt time.Time
+		if err := rows.Scan(&timestamp, &createdAt); err != nil {
+			rows.Close()
+			return result, err
+		}
+		result = append(result, migration.Version{Timestamp: timestamp, CreatedAt: createdAt})
+	}
+
+	return result, nil
 }

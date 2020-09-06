@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-type migratorFactory func(cfg config) (*tern.Migrator, error)
+type migratorFactory func(cfg config) (*tern.Migrator, tern.CloserFunc, error)
 
 type config struct {
 	databaseUrl      string
@@ -24,61 +24,82 @@ type config struct {
 
 type migratorFactoryMap map[string]migratorFactory
 
-func migrate(cfg config) error {
-	m, err := createMigrator(cfg)
-	if err != nil {
-		return err
+func migrate(cfg config) (err error) {
+	m, closer, createErr := createMigrator(cfg)
+	if createErr != nil {
+		err = createErr
+		return
 	}
+
+	defer func() {
+		if closeErr := closer(); closeErr != nil {
+			err = closeErr
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	_, err = m.Migrate(ctx)
-	if err != nil {
-		return err
+	if _, migrateErr := m.Migrate(ctx); migrateErr != nil {
+		err = migrateErr
+		return
+	}
+
+	return
+}
+
+func rollback(cfg config) (err error) {
+	m, closer, createErr := createMigrator(cfg)
+	if createErr != nil {
+		err = createErr
+		return
+	}
+
+	defer func() {
+		if closeErr := closer(); closeErr != nil {
+			err = closeErr
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	if _, rollbackErr := m.Rollback(ctx); rollbackErr != nil {
+		err = rollbackErr
+		return
 	}
 
 	return nil
 }
 
-func rollback(cfg config) error {
-	m, err := createMigrator(cfg)
-	if err != nil {
-		return err
+func refresh(cfg config) (err error) {
+	m, closer, createErr := createMigrator(cfg)
+	if createErr != nil {
+		err = createErr
+		return
 	}
+
+	defer func() {
+		if closeErr := closer(); closeErr != nil {
+			err = closeErr
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	_, err = m.Rollback(ctx)
-	if err != nil {
-		return err
+	if _, _, refreshErr := m.Refresh(ctx); refreshErr != nil {
+		err = refreshErr
+		return
 	}
 
 	return nil
 }
 
-func refresh(cfg config) error {
-	m, err := createMigrator(cfg)
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	_, _, err = m.Refresh(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func createMySQLMigrator(cfg config) (*tern.Migrator, error) {
+func createMySQLMigrator(cfg config) (*tern.Migrator, tern.CloserFunc, error) {
 	db, err := sqlx.Open("mysql", strings.TrimPrefix(cfg.databaseUrl, "mysql://"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var opts []tern.OptionFunc
@@ -92,7 +113,7 @@ func createMySQLMigrator(cfg config) (*tern.Migrator, error) {
 	return tern.NewMigrator(opts...)
 }
 
-func createMigrator(cfg config) (*tern.Migrator, error) {
+func createMigrator(cfg config) (*tern.Migrator, tern.CloserFunc, error) {
 	factoryMap := make(map[string]migratorFactory)
 	factoryMap["mysql"] = createMySQLMigrator
 
@@ -102,16 +123,16 @@ func createMigrator(cfg config) (*tern.Migrator, error) {
 	} else if strings.HasPrefix(cfg.databaseUrl, "sqlite") {
 		driver = "sqlite"
 	} else {
-		return nil, errors.New("unknown database driver")
+		return nil, nil, errors.New("unknown database driver")
 	}
 
 	return createMigratorFrom(driver, factoryMap, cfg)
 }
 
-func createMigratorFrom(driver string, factoryMap migratorFactoryMap, cfg config) (*tern.Migrator, error) {
+func createMigratorFrom(driver string, factoryMap migratorFactoryMap, cfg config) (*tern.Migrator, tern.CloserFunc, error) {
 	factory, ok := factoryMap[driver]
 	if !ok {
-		return nil, errors.Errorf("could not find factory for driver [%s]", driver)
+		return nil, nil, errors.Errorf("could not find factory for driver [%s]", driver)
 	}
 
 	return factory(cfg)

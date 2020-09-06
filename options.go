@@ -11,6 +11,7 @@ import (
 
 type OptionFunc func(*Migrator) error
 type MySQLOptionFunc func(*database.MySQLOptions, *database.ConnectOptions)
+type SqliteOptionFunc func(*database.SqliteOptions, *database.ConnectOptions)
 type ActionConfigurator func(a *action)
 
 func UseLocalFolderSource(folder string) OptionFunc {
@@ -62,7 +63,51 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 	}
 }
 
-func UseLogger(p logger.Printer, printSql, printDebug bool) OptionFunc {
+func UseSqlite(db *sql.DB, options ...SqliteOptionFunc) OptionFunc {
+	return func(m *Migrator) error {
+		sqliteOpts := &database.SqliteOptions{
+			CommonOptions: database.CommonOptions{
+				MigrationsTable: database.DefaultMigrationsTable,
+			},
+		}
+
+		connectOpts := database.NewDefaultConnectOptions()
+
+		for _, oFunc := range options {
+			oFunc(sqliteOpts, connectOpts)
+		}
+
+		connector := database.MakeRetryingConnector(connectOpts)
+		gateway, err := database.NewSqliteGateway(db, connector, sqliteOpts)
+		if err != nil {
+			return err
+		}
+
+		m.gateway = gateway
+
+		return nil
+	}
+}
+
+func WithSqliteMigrationTable(migrationTable string) SqliteOptionFunc {
+	return func(mysqlOpts *database.SqliteOptions, connectOpts *database.ConnectOptions) {
+		mysqlOpts.MigrationsTable = migrationTable
+	}
+}
+
+func WithSqliteMaxConnectionAttempts(attempts int) SqliteOptionFunc {
+	return func(mysqlOpts *database.SqliteOptions, connectOpts *database.ConnectOptions) {
+		connectOpts.MaxAttempts = attempts
+	}
+}
+
+func WithSqliteConnectionTimeout(timeout time.Duration) SqliteOptionFunc {
+	return func(mysqlOpts *database.SqliteOptions, connectOpts *database.ConnectOptions) {
+		connectOpts.MaxTimeout = timeout
+	}
+}
+
+func UseColorLogger(p logger.Printer, printSql, printDebug bool) OptionFunc {
 	return func(m *Migrator) error {
 		m.lg = logger.New(p, printSql, printDebug)
 		return nil

@@ -78,7 +78,7 @@ func CreateServiceGateway(driver string, db *sql.DB, migrationsTable string) (Se
 				LockFor: MysqlDefaultLockSeconds,
 				LockKey: MysqlDefaultLockKey,
 			})
-	case "sqlite":
+	case "sqlite3", "sqlite":
 		return NewSqliteGateway(db, connector,
 			&SqliteOptions{
 		CommonOptions{

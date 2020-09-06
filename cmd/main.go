@@ -107,7 +107,7 @@ func createMySQLMigrator(cfg config) (*tern.Migrator, tern.CloserFunc, error) {
 		opts,
 		tern.UseMySQL(db.DB),
 		tern.UseLocalFolderSource(cfg.migrationsFolder),
-		tern.UseLogger(log.New(os.Stdout, "", 0), true, true),
+		tern.UseColorLogger(log.New(os.Stdout, "", 0), true, true),
 	)
 
 	return tern.NewMigrator(opts...)

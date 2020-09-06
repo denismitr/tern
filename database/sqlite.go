@@ -20,7 +20,7 @@ const (
 	sqliteDeleteVersionQuery = "DELETE FROM %s WHERE version = ?;"
 	sqliteDropMigrationsSchema = "DROP TABLE IF EXISTS %s;"
 	sqliteInsertVersionQuery = "INSERT INTO %s (version, name) VALUES (?, ?);"
-	sqliteShowTablesQuery = "SHOW TABLES;"
+	sqliteShowTablesQuery = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
 )
 
 type SqliteOptions struct {

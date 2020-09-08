@@ -29,26 +29,27 @@ func NewDefaultConnectOptions() *ConnectOptions {
 }
 
 type connector interface {
-	connect(ctx context.Context, db *sql.DB) (*sql.Conn, error)
+	connect(ctx context.Context) (*sql.Conn, error)
 	timeout() time.Duration
 }
 
 type RetryingConnector struct {
 	options *ConnectOptions
+	db *sql.DB
 }
 
 func (c RetryingConnector) timeout() time.Duration {
 	return c.options.MaxTimeout
 }
 
-func MakeRetryingConnector(options *ConnectOptions) RetryingConnector {
-	return RetryingConnector{options: options}
+func MakeRetryingConnector(db *sql.DB, options *ConnectOptions) RetryingConnector {
+	return RetryingConnector{db: db, options: options}
 }
 
-func (c RetryingConnector) connect(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
+func (c RetryingConnector) connect(ctx context.Context) (*sql.Conn, error) {
 	var conn *sql.Conn
 	if err := retry.Incremental(ctx, 2*time.Second, c.options.MaxAttempts, func(attempt int) (err error) {
-		conn, err = db.Conn(ctx)
+		conn, err = c.db.Conn(ctx)
 		if err != nil {
 			return errors.Wrap(err, "could not establish DB connection")
 		}

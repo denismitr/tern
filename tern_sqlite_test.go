@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/denismitr/tern/database"
 	"github.com/denismitr/tern/migration"
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
@@ -13,25 +12,25 @@ import (
 	"time"
 )
 
-const mysqlConnection = "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true"
-const mysqlMigrationsFolder = "./stubs/migrations/mysql"
+const sqliteConnection = "./test.sqlite"
+const sqliteMigrationsFolder = "./stubs/migrations/sqlite"
 
-func Test_MigratorCanBeInstantiated(t *testing.T) {
-	db, err := sqlx.Open("mysql", mysqlConnection)
+func Test_MigratorCanBeInstantiated_WithSqliteDriver(t *testing.T) {
+	db, err := sqlx.Open("sqlite3", sqliteConnection)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	m, closer, err := NewMigrator(UseMySQL(db.DB))
+	m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
 	assert.NoError(t, err)
 	assert.NotNil(t, m)
 	assert.NoError(t, closer())
 
-	db.Close()
+	assert.NoError(t, db.Close())
 }
 
-func Test_Tern_WithMySQL(t *testing.T) {
-	db, err := sqlx.Open("mysql", mysqlConnection)
+func Test_Tern_WithSqlite(t *testing.T) {
+	db, err := sqlx.Open("sqlite3", sqliteConnection)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,8 +46,8 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
 		m, closer, err := NewMigrator(
-			UseMySQL(db.DB),
-			UseLocalFolderSource(mysqlMigrationsFolder),
+			UseSqlite(db.DB),
+			UseLocalFolderSource(sqliteMigrationsFolder),
 		)
 
 		assert.NoError(t, err)
@@ -137,7 +136,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
 		assert.NoError(t, err)
 		defer func() {
 			assert.NoError(t, closer())
@@ -212,7 +211,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
 		assert.NoError(t, err)
 		defer func() {
 			assert.NoError(t, closer())
@@ -261,7 +260,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("run_single_migration_when_step_is_one", func(t *testing.T) {
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
 		assert.NoError(t, err)
 
 		defer func() {
@@ -316,8 +315,8 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 	t.Run("it_can_migrate_a_single_file", func(t *testing.T) {
 		m, closer, err := NewMigrator(
-			UseMySQL(db.DB),
-			UseLocalFolderSource(mysqlMigrationsFolder),
+			UseSqlite(db.DB),
+			UseLocalFolderSource(sqliteMigrationsFolder),
 		)
 
 		assert.NoError(t, err)
@@ -371,7 +370,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_refresh_all_migrations", func(t *testing.T) {
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
 		assert.NoError(t, err)
 
 		defer func() {
@@ -436,7 +435,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
 		assert.NoError(t, err)
 		defer func() {
 			assert.NoError(t, closer())
@@ -489,8 +488,8 @@ func Test_Tern_WithMySQL(t *testing.T) {
 }
 
 
-func TestInMemorySourceMigrations(t *testing.T) {
-	db, err := sqlx.Open("mysql", mysqlConnection)
+func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
+	db, err := sqlx.Open("sqlite3", sqliteConnection)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -509,24 +508,24 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			migration.New(
 				"1596897167",
 				"Create foo table",
-				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY);"},
 				[]string{"DROP TABLE IF EXISTS foo;"},
 			),
 			migration.New(
 				"1596897188",
 				"Create bar table",
-				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY);"},
 				[]string{"DROP TABLE IF EXISTS bar;"},
 			),
 			migration.New(
 				"1597897177",
 				"Create baz table",
-				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL);"},
 				[]string{"DROP TABLE IF EXISTS baz;"},
 			),
 		)
 
-		m, closer, err := NewMigrator(UseMySQL(db.DB), source)
+		m, closer, err := NewMigrator(UseSqlite(db.DB), source)
 		assert.NoError(t, err)
 
 		defer func() {
@@ -598,25 +597,25 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			migration.New(
 				"1596897167",
 				"Create foo table",
-				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY)"},
 				[]string{"DROP TABLE IF EXISTS foo;"},
 			),
 			migration.New(
 				"1596897188",
 				"Create bar table",
-				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY)"},
 				[]string{"DROP TABLE IF EXISTS bar;"},
 			),
 			migration.New(
 				"1597897177",
 				"Create baz table",
-				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL)"},
 				[]string{"DROP TABLE IF EXISTS baz;"},
 			),
 		)
 
 		m, closer, err := NewMigrator(
-			UseMySQL(db.DB, WithMySQLMaxConnectionAttempts(1), WithMySQLConnectionTimeout(time.Second)),
+			UseSqlite(db.DB, WithSqliteMaxConnectionAttempts(1), WithSqliteConnectionTimeout(time.Second)),
 			source,
 		)
 		assert.NoError(t, err)
@@ -685,24 +684,24 @@ func TestInMemorySourceMigrations(t *testing.T) {
 		}
 	})
 
-	t.Run("it can migrate and rollback all in memory migrations using mysql config", func(t *testing.T) {
+	t.Run("it can migrate and rollback all in memory migrations using sqlite config", func(t *testing.T) {
 		source := UseInMemorySource(
 			migration.New(
 				"1596897167",
 				"Create foo table",
-				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY)"},
 				[]string{"DROP TABLE IF EXISTS foo;"},
 			),
 			migration.New(
 				"1596897188",
 				"Create bar table",
-				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY)"},
 				[]string{"DROP TABLE IF EXISTS bar;"},
 			),
 			migration.New(
 				"1597897177",
 				"Create baz table",
-				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"},
+				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL)"},
 				[]string{"DROP TABLE IF EXISTS baz;"},
 			),
 		)
@@ -715,13 +714,11 @@ func TestInMemorySourceMigrations(t *testing.T) {
 		defer sg.Close()
 
 		m, closer, err := NewMigrator(
-			UseMySQL(
+			UseSqlite(
 				db.DB,
-				WithMySQLMigrationTable("migration_versions"),
-				WithMySQLMaxConnectionAttempts(10),
-				WithMySQLConnectionTimeout(3 * time.Second),
-				WithMySQLLockFor(10),
-				WithMySQLLockKey("migrator"),
+				WithSqliteMigrationTable("migration_versions"),
+				WithSqliteMaxConnectionAttempts(10),
+				WithSqliteConnectionTimeout(3 * time.Second),
 			),
 			source,
 		)

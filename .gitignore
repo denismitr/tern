@@ -1,2 +1,5 @@
 vendor/
 .idea/
+tern-cli
+*.sqlite
+*.db

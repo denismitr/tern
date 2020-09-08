@@ -25,14 +25,6 @@ type CommonOptions struct {
 	MigrationsTable string
 }
 
-type migrateFunc func(ctx context.Context, ex ctxExecutor, lg logger.Logger, migration *migration.Migration, insertQuery string) error
-type rollbackFunc func(ctx context.Context, ex ctxExecutor, lg logger.Logger, migration *migration.Migration, removeVersionQuery string) error
-
-type handlers struct {
-	migrate  migrateFunc
-	rollback rollbackFunc
-}
-
 type ctxExecutor interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }

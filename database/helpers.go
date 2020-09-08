@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/denismitr/tern/migration"
+	"time"
 )
 
 func inVersions(version migration.Version, versions []migration.Version) bool {
@@ -17,7 +18,7 @@ func inVersions(version migration.Version, versions []migration.Version) bool {
 }
 
 func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, error) {
-	rows, err := tx.Query(fmt.Sprintf("SELECT version FROM %s", migrationsTable))
+	rows, err := tx.Query(fmt.Sprintf("SELECT version, created_at FROM %s", migrationsTable))
 	if err != nil {
 		return nil, err
 	}
@@ -26,12 +27,12 @@ func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, erro
 
 	for rows.Next() {
 		var timestamp string
-
-		if err := rows.Scan(&timestamp); err != nil {
+		var createdAt time.Time
+		if err := rows.Scan(&timestamp, &createdAt); err != nil {
 			rows.Close()
 			return result, err
 		}
-		result = append(result, migration.Version{Timestamp: timestamp})
+		result = append(result, migration.Version{Timestamp: timestamp, CreatedAt: createdAt})
 	}
 
 	return result, nil

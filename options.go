@@ -114,6 +114,12 @@ func UseColorLogger(p logger.Printer, printSql, printDebug bool) OptionFunc {
 	}
 }
 
+func WithMySQLNoLock() MySQLOptionFunc {
+	return func(mysqlOpts *database.MySQLOptions, connectOpts *database.ConnectOptions) {
+		mysqlOpts.NoLock = true
+	}
+}
+
 func WithMySQLLockKey(key string) MySQLOptionFunc {
 	return func(mysqlOpts *database.MySQLOptions, connectOpts *database.ConnectOptions) {
 		mysqlOpts.LockKey = key

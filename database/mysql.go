@@ -18,12 +18,11 @@ const (
 			created_at TIMESTAMP default CURRENT_TIMESTAMP
 		) ENGINE=INNODB;	
 	`
-	mysqlShowTables = "SHOW TABLES;"
-	mysqlDeleteVersionQuery = "DELETE FROM %s WHERE version = ?;"
+	mysqlShowTables           = "SHOW TABLES;"
+	mysqlDeleteVersionQuery   = "DELETE FROM %s WHERE version = ?;"
 	mysqlDropMigrationsSchema = `DROP TABLE IF EXISTS %s;`
-	mysqlInsertVersionQuery = "INSERT INTO %s (version, name) VALUES (?, ?);"
+	mysqlInsertVersionQuery   = "INSERT INTO %s (version, name) VALUES (?, ?);"
 )
-
 
 const MysqlDefaultLockKey = "tern_migrations"
 const MysqlDefaultLockSeconds = 3
@@ -32,14 +31,20 @@ type MySQLOptions struct {
 	CommonOptions
 	LockKey string
 	LockFor int
+	NoLock  bool
 }
 
 type mySQLLocker struct {
 	lockKey string
 	lockFor int
+	noLock  bool
 }
 
 func (g *mySQLLocker) lock(ctx context.Context, conn *sql.Conn) error {
+	if g.noLock {
+		return nil
+	}
+
 	if _, err := conn.ExecContext(ctx, "SELECT GET_LOCK(?, ?)", g.lockKey, g.lockFor); err != nil {
 		return errors.Wrapf(err, "could not obtain [%s] exclusive MySQL DB lock for [%d] seconds", g.lockKey, g.lockFor)
 	}
@@ -48,6 +53,10 @@ func (g *mySQLLocker) lock(ctx context.Context, conn *sql.Conn) error {
 }
 
 func (g *mySQLLocker) unlock(ctx context.Context, conn *sql.Conn) error {
+	if g.noLock {
+		return nil
+	}
+
 	if _, err := conn.ExecContext(ctx, "SELECT RELEASE_LOCK(?)", g.lockKey); err != nil {
 		return errors.Wrapf(err, "could not release [%s] exclusive MySQL DB lock", g.lockKey)
 	}
@@ -80,7 +89,7 @@ func (qb mysqlQueryBuilder) createDropMigrationsSchemaQuery() string {
 }
 
 type MySQLGateway struct {
-	db              *dbh
+	db *dbh
 }
 
 var _ Gateway = (*MySQLGateway)(nil)
@@ -95,12 +104,13 @@ func NewMySQLGateway(connector connector, options *MySQLOptions) (*MySQLGateway,
 		&mySQLLocker{
 			lockKey: options.LockKey,
 			lockFor: options.LockFor,
+			noLock:  options.NoLock,
 		},
 		mysqlQueryBuilder{migrationsTable: options.MigrationsTable},
 		options.MigrationsTable,
 	)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60 * time.Second) // fixme
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second) // fixme
 	defer cancel()
 
 	if err := db.connect(ctx); err != nil {

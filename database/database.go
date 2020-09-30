@@ -291,10 +291,12 @@ func (db *dbh) rollbackOne(ctx context.Context, ex ctxExecutor, migration *migra
 		return ErrMigrationVersionNotSpecified
 	}
 
-	db.lg.SQL(migration.RollbackScripts())
+	if migration.RollbackScripts() != "" {
+		db.lg.SQL(migration.RollbackScripts())
 
-	if _, err := ex.ExecContext(ctx, migration.RollbackScripts()); err != nil {
-		return errors.Wrapf(err, "could not rollback migration [%s]", migration.Key)
+		if _, err := ex.ExecContext(ctx, migration.RollbackScripts()); err != nil {
+			return errors.Wrapf(err, "could not rollback migration [%s]", migration.Key)
+		}
 	}
 
 	db.lg.SQL(removeVersionQuery, migration.Version.Timestamp)

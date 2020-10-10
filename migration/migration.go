@@ -3,28 +3,41 @@ package migration
 import (
 	"bytes"
 	"github.com/pkg/errors"
+	"strconv"
 	"strings"
 	"time"
 )
 
 var ErrInvalidTimestamp = errors.New("invalid timestamp in migration filename")
 
-type Version struct {
-	Timestamp string
-	CreatedAt time.Time
-}
+type (
+	VersionFormat int
 
-type Migration struct {
-	Key      string
-	Name     string
-	Version  Version
-	Migrate  []string
-	Rollback []string
-}
+	Version struct {
+		Format    VersionFormat
+		Timestamp string
+		CreatedAt time.Time
+	}
+
+	Migration struct {
+		Key      string
+		Name     string
+		Version  Version
+		Migrate  []string
+		Rollback []string
+	}
+
+	ClockFunc func() time.Time
+)
+
+const (
+	TimestampFormat VersionFormat = iota
+	DatetimeFormat
+)
 
 func NewMigrationFromDB(timestamp string, createdAt time.Time, name string) *Migration {
 	return &Migration{
-		Key:  createKeyFromTimestampAndName(timestamp, name),
+		Key:  CreateKeyFromTimestampAndName(timestamp, name),
 		Name: name,
 		Version: Version{
 			Timestamp: timestamp,
@@ -41,22 +54,22 @@ func NewMigrationFromFile(
 	rollback string,
 ) (*Migration, error) {
 	return &Migration{
-		Key:  key,
-		Name: name,
-		Version: version,
-		Migrate: []string{migrate},
+		Key:      key,
+		Name:     name,
+		Version:  version,
+		Migrate:  []string{migrate},
 		Rollback: []string{rollback},
 	}, nil
 }
 
 func New(timestamp, name string, migrate, rollback []string) *Migration {
 	return &Migration{
-		Key:  createKeyFromTimestampAndName(timestamp, name),
+		Key:  CreateKeyFromTimestampAndName(timestamp, name),
 		Name: name,
 		Version: Version{
 			Timestamp: timestamp,
 		},
-		Migrate: migrate,
+		Migrate:  migrate,
 		Rollback: rollback,
 	}
 }
@@ -118,10 +131,26 @@ func (m Migrations) Swap(i, j int) {
 	m[i], m[j] = m[j], m[i]
 }
 
-func createKeyFromTimestampAndName(timestamp, name string) string {
+func CreateKeyFromTimestampAndName(timestamp, name string) string {
 	var result bytes.Buffer
 	result.WriteString(timestamp)
 	result.WriteString("_")
 	result.WriteString(strings.Replace(strings.ToLower(name), " ", "_", -1))
 	return result.String()
+}
+
+func GenerateVersion(cf ClockFunc, f VersionFormat) Version {
+	var v Version
+
+	v.Format = f
+	if v.Format == TimestampFormat {
+		v.Timestamp = strconv.Itoa(int(cf().Unix()))
+	} else {
+		v.Timestamp = cf().Format("2006-01-02 15:04:05")
+		v.Timestamp = strings.ReplaceAll(v.Timestamp, "-", "")
+		v.Timestamp = strings.ReplaceAll(v.Timestamp, ":", "")
+		v.Timestamp = strings.ReplaceAll(v.Timestamp, " ", "")
+	}
+
+	return v
 }

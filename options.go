@@ -21,7 +21,7 @@ func UseLocalFolderSource(folder string) OptionFunc {
 			return err
 		}
 
-		m.converter = conv
+		m.selector = conv
 		return nil
 	}
 }
@@ -30,7 +30,7 @@ func UseInMemorySource(migrations ...*migration.Migration) OptionFunc {
 	return func(m *Migrator) error {
 		conv := source.NewInMemorySource(migrations...)
 
-		m.converter = conv
+		m.selector = conv
 		return nil
 	}
 }

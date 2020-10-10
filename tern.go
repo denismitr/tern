@@ -16,7 +16,7 @@ type CloserFunc func() error
 type Migrator struct {
 	lg             logger.Logger
 	gateway        database.Gateway
-	converter      source.Selector
+	selector       source.Selector
 	connectOptions *database.ConnectOptions
 }
 
@@ -36,8 +36,8 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 		return nil, nil, ErrGatewayNotInitialized
 	}
 
-	// Default converter implementation
-	if m.converter == nil {
+	// Default selector implementation
+	if m.selector == nil {
 		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder)
 		if gatewayErr := m.gateway.Close(); gatewayErr != nil {
 			return nil, nil, errors.Wrap(err, gatewayErr.Error())
@@ -47,7 +47,7 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 			return nil, nil, err
 		}
 
-		m.converter = localFsConverter
+		m.selector = localFsConverter
 	}
 
 	if m.lg == nil {
@@ -71,7 +71,7 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 		f(act)
 	}
 
-	migrations, err := m.converter.Select(ctx, source.Filter{Keys: act.keys})
+	migrations, err := m.selector.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, err
@@ -80,7 +80,7 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 	p := database.Plan{Steps: act.steps}
 	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
-		if ! errors.Is(err, database.ErrNothingToMigrate) {
+		if !errors.Is(err, database.ErrNothingToMigrate) {
 			m.lg.Error(err)
 		}
 
@@ -98,7 +98,7 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 		f(act)
 	}
 
-	migrations, err := m.converter.Select(ctx, source.Filter{Keys: act.keys})
+	migrations, err := m.selector.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, errors.Wrap(err, "could not rollback migrations")
@@ -134,7 +134,7 @@ func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migr
 		f(act)
 	}
 
-	migrations, err := m.converter.Select(ctx, source.Filter{})
+	migrations, err := m.selector.Select(ctx, source.Filter{})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, nil, err
@@ -147,4 +147,13 @@ func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migr
 	}
 
 	return rolledBack, migrated, nil
+}
+
+// Source - returns migrator selector if it implements the full source.Source interface
+func (m *Migrator) Source() source.Source {
+	if s, ok := m.selector.(source.Source); ok {
+		return s
+	}
+
+	return nil
 }

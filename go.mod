@@ -11,4 +11,5 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/xo/dburl v0.0.0-20200727080105-4a02649c2fea // indirect
 	google.golang.org/appengine v1.6.6 // indirect
+	gopkg.in/yaml.v2 v2.3.0
 )

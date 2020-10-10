@@ -4,6 +4,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"sort"
 	"testing"
+	"time"
 )
 
 func Test_MigrationCanAssembleScriptsInOne(t *testing.T) {
@@ -90,4 +91,19 @@ func Test_MigrationsCanBeSortedByVersion(t *testing.T) {
 	assert.Equal(t, migrations[1].Name, m2.Name)
 	assert.Equal(t, migrations[2].Name, m1.Name)
 	assert.Equal(t, migrations[3].Name, m3.Name)
+}
+
+func Test_GenerateVersion_InTimestampFormat(t *testing.T) {
+	cf := func() time.Time {
+		t, _ := time.Parse(time.RFC850, "Monday, 02-Jan-19 17:18:19 UTC")
+		return t
+	}
+
+	versionTs := GenerateVersion(cf, TimestampFormat)
+	assert.Equal(t, versionTs.Format, TimestampFormat)
+	assert.Equal(t, "1546449499", versionTs.Timestamp)
+
+	versionDt := GenerateVersion(cf, DatetimeFormat)
+	assert.Equal(t, versionDt.Format, DatetimeFormat)
+	assert.Equal(t, "20190102171819", versionDt.Timestamp)
 }

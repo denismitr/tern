@@ -3,3 +3,5 @@ vendor/
 tern-cli
 *.sqlite
 *.db
+cmd/migrations
+cmd/tern.yaml

@@ -2,9 +2,9 @@ package retry
 
 import (
 	"context"
-	"time"
 	"github.com/pkg/errors"
 	"sync"
+	"time"
 )
 
 var ErrTooManyAttempts = errors.New("too many retry attempts")

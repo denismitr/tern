@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"path/filepath"
@@ -18,7 +19,7 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder)
+	c, err := NewLocalFSSource(folder, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	key := "1596897167_create_foo_table"
@@ -38,7 +39,7 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder)
+	c, err := NewLocalFSSource(folder, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	t.Run("all migrations can be read from local folder", func(t *testing.T) {
@@ -102,7 +103,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		{in: "1596897167_create_foo_table", out: "1596897167"},
 		{in: "1496897167_create_foo_table", out: "1496897167"},
 		{in: "1496897167", out: "1496897167"},
-		{in: "31536000", out: "31536000"},
+		{in: "315360001", out: "315360001"},
 		{in: "14968971672", out: "14968971672"},
 	}
 
@@ -110,10 +111,10 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		in string
 		err error
 	}{
-		{in: "M1596897167_create_foo_table", err:  ErrInvalidTimestamp},
-		{in: "15968V97167_create_foo_table", err:  ErrInvalidTimestamp},
-		{in: "_foo", err:  ErrInvalidTimestamp},
-		{in: "1253656456566_foo", err:  ErrInvalidTimestamp},
+		{in: "M1596897167_create_foo_table", err: ErrInvalidTimestamp},
+		{in: "15968V97167_create_foo_table", err: ErrInvalidTimestamp},
+		{in: "_foo", err: ErrInvalidTimestamp},
+		{in: "1253656456566_foo", err: ErrInvalidTimestamp},
 	}
 
 	folder, err := filepath.Abs(defaultMysqlStubs)
@@ -121,7 +122,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder)
+	c, err := NewLocalFSSource(folder, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	for _, tc := range valid {
@@ -157,7 +158,7 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 		{in: "1496897167_create_the_bar_2_table", out: "Create the bar 2 table"},
 		{in: "1496897167_create_the_bar-2_table", out: "Create the bar-2 table"},
 		{in: "1496897167_delete_some_field", out: "Delete some field"},
-		{in: "31536000_initial", out: "Initial"},
+		{in: "3153600022_initial", out: "Initial"},
 		{in: "14968971672", out: ""},
 	}
 
@@ -166,7 +167,7 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder)
+	c, err := NewLocalFSSource(folder, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	for _, tc := range tt {

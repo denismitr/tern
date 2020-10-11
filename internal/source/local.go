@@ -16,23 +16,32 @@ import (
 
 const DefaultMigrationsFolder = "./migrations"
 
-const defaultSqlExtension = "sql"
-const migrateFileSuffix = "migrate"
-const rollbackFileSuffix = "rollback"
-const DefaultMigrateFileFullExtension = ".migrate.sql"
-const DefaultRollbackFileFullExtension = ".rollback.sql"
+const (
+	defaultSqlExtension = "sql"
+
+	migrateFileSuffix                = "migrate"
+	rollbackFileSuffix               = "rollback"
+	defaultMigrateFileFullExtension  = ".migrate.sql"
+	defaultRollbackFileFullExtension = ".rollback.sql"
+
+	timestampBasedVersionFormat = `^(?P<version>\d{9,11})(_\w+)?$`
+	timestampBasedNameFormat = `^\d{9,11}_(?P<name>\w+[\w_-]+)?$`
+	datetimeBasedVersionFormat = `^(?P<version>\d{14})(_\w+)?$`
+	datetimeBasedNameFormat = `^\d{14}_(?P<name>\w+[\w_-]+)?$`
+)
 
 type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
 
 type LocalFSConverter struct {
 	folder string
+	vf migration.VersionFormat
 	versionRegexp *regexp.Regexp
 	nameRegexp *regexp.Regexp
 }
 
 func (c *LocalFSConverter) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
 	key := migration.CreateKeyFromTimestampAndName(dt, name)
-	migrateFilename := filepath.Join(c.folder, key + DefaultMigrateFileFullExtension)
+	migrateFilename := filepath.Join(c.folder, key +defaultMigrateFileFullExtension)
 	mf, err := os.Create(migrateFilename)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not create file [%s]", migrateFilename)
@@ -51,7 +60,7 @@ func (c *LocalFSConverter) Create(dt, name string, withRollback bool) (*migratio
 	}
 
 	if withRollback {
-		rollbackFilename := filepath.Join(c.folder, key + DefaultRollbackFileFullExtension)
+		rollbackFilename := filepath.Join(c.folder, key +defaultRollbackFileFullExtension)
 		rf, err := os.Create(rollbackFilename)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not create file [%s]", rollbackFilename)
@@ -65,8 +74,8 @@ func (c *LocalFSConverter) Create(dt, name string, withRollback bool) (*migratio
 	return m, nil
 }
 
-func NewLocalFSSource(folder string) (*LocalFSConverter, error) {
-	versionRegexp, nameRegexp, err := LocalFSParsingRules()
+func NewLocalFSSource(folder string, vf migration.VersionFormat) (*LocalFSConverter, error) {
+	versionRegexp, nameRegexp, err := LocalFSParsingRules(vf)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +84,7 @@ func NewLocalFSSource(folder string) (*LocalFSConverter, error) {
 		folder: folder,
 		versionRegexp: versionRegexp,
 		nameRegexp: nameRegexp,
+
 	}, nil
 }
 
@@ -89,7 +99,7 @@ func (c *LocalFSConverter) IsValid() bool {
 
 func (c *LocalFSConverter) AlreadyExists(dt, name string) bool {
 	key := migration.CreateKeyFromTimestampAndName(dt, name)
-	filename := filepath.Join(c.folder, key + DefaultMigrateFileFullExtension)
+	filename := filepath.Join(c.folder, key +defaultMigrateFileFullExtension)
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return false
@@ -97,13 +107,26 @@ func (c *LocalFSConverter) AlreadyExists(dt, name string) bool {
 	return !info.IsDir()
 }
 
+func LocalFSParsingRules(vf migration.VersionFormat) (*regexp.Regexp, *regexp.Regexp, error) {
+	var versionRegexFormat string
+	var nameRegexFormat string
 
-func LocalFSParsingRules() (*regexp.Regexp, *regexp.Regexp, error) {
-	versionRegexp, err := regexp.Compile(`^(?P<version>\d{1,12})(_\w+)?$`)
+	if vf == migration.TimestampFormat {
+		versionRegexFormat = timestampBasedVersionFormat
+		nameRegexFormat = timestampBasedNameFormat
+	} else if vf == migration.DatetimeFormat {
+		versionRegexFormat = datetimeBasedVersionFormat
+		nameRegexFormat = datetimeBasedNameFormat
+	} else {
+		return nil, nil, errors.New("invalid or undefined version format")
+	}
+
+	versionRegexp, err := regexp.Compile(versionRegexFormat)
 	if err != nil {
 		return nil, nil, err
 	}
-	nameRegexp, err := regexp.Compile(`^\d{1,12}_(?P<name>\w+[\w_-]+)?$`)
+
+	nameRegexp, err := regexp.Compile(nameRegexFormat)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -191,8 +214,8 @@ func (c *LocalFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]i
 }
 
 func (c *LocalFSConverter) readOne(key string) (*migration.Migration, error) {
-	up := filepath.Join(c.folder, key+DefaultMigrateFileFullExtension)
-	down := filepath.Join(c.folder, key+DefaultRollbackFileFullExtension)
+	up := filepath.Join(c.folder, key+defaultMigrateFileFullExtension)
+	down := filepath.Join(c.folder, key+defaultRollbackFileFullExtension)
 
 	fUp, err := os.Open(up)
 	if err != nil {

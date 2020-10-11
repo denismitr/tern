@@ -118,7 +118,7 @@ func migrate(app *cli.App, steps, timeout int) {
 
 	if err := app.Migrate(ctx, cli.ActionConfig{Steps: steps}); err != nil {
 		if errors.Is(err, database.ErrNothingToMigrate) {
-			fmt.Println(aurora.Green("tern-cli: "), "Nothing to migrate")
+			green("Nothing to migrate")
 			os.Exit(0)
 		}
 
@@ -133,11 +133,11 @@ func migrate(app *cli.App, steps, timeout int) {
 func createMigration(app *cli.App, createCmd *string, noRollback *bool) {
 	m, err := app.CreateMigration(*createCmd, !*noRollback)
 	if err != nil {
-		fmt.Println(aurora.Red("tern-cli: "), err.Error())
+		red(err.Error())
 		os.Exit(1)
 	}
 
-	fmt.Println(aurora.Green("tern-cli: "), "Created migration "+m.Key)
+	green("Migration %s created ", m.Key)
 	os.Exit(0)
 }
 

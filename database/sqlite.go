@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/denismitr/tern/logger"
+	"github.com/denismitr/tern/internal/logger"
 	"github.com/denismitr/tern/migration"
 	"time"
 )
@@ -14,7 +14,7 @@ const (
 		CREATE TABLE IF NOT EXISTS %s (
 			version VARCHAR(13) PRIMARY KEY,
 			name VARCHAR(255),
-			created_at TIMESTAMP default CURRENT_TIMESTAMP
+			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
 		);	
 	`
 	sqliteDeleteVersionQuery   = "DELETE FROM %s WHERE version = ?;"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/denismitr/tern/logger"
+	"github.com/denismitr/tern/internal/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
 	"time"

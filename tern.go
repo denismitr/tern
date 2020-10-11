@@ -3,9 +3,9 @@ package tern
 import (
 	"context"
 	"github.com/denismitr/tern/database"
-	"github.com/denismitr/tern/logger"
+	"github.com/denismitr/tern/internal/logger"
+	"github.com/denismitr/tern/internal/source"
 	"github.com/denismitr/tern/migration"
-	"github.com/denismitr/tern/source"
 	"github.com/pkg/errors"
 )
 
@@ -38,7 +38,7 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 
 	// Default selector implementation
 	if m.selector == nil {
-		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder)
+		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder, migration.TimestampFormat)
 		if gatewayErr := m.gateway.Close(); gatewayErr != nil {
 			return nil, nil, errors.Wrap(err, gatewayErr.Error())
 		}

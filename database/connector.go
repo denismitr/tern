@@ -3,7 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
-	"github.com/denismitr/tern/retry"
+	"github.com/denismitr/tern/internal/retry"
 	"github.com/pkg/errors"
 	"time"
 )

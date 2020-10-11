@@ -13,9 +13,9 @@ import (
 const (
 	mysqlCreateMigrationsSchema = `
 		CREATE TABLE IF NOT EXISTS %s (
-			version VARCHAR(13) PRIMARY KEY,
-			name VARCHAR(255),
-			created_at TIMESTAMP default CURRENT_TIMESTAMP
+			version VARCHAR(14) PRIMARY KEY,
+			name VARCHAR(120),
+			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
 		) ENGINE=INNODB;	
 	`
 	mysqlShowTables           = "SHOW TABLES;"

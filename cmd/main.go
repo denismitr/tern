@@ -6,23 +6,27 @@ import (
 	"fmt"
 	"github.com/denismitr/tern/database"
 	"github.com/denismitr/tern/internal/cli"
-	"github.com/denismitr/tern/migration"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/pkg/errors"
 	"os"
 	"time"
 )
 
+const defaultTimeout = 360
+
 func main() {
-	createCmd := flag.String("create", "", "create new migration")
 	initCmd := flag.String("init-cfg", "./tern.yaml", "initialize Tern config file")
-	migrateCmd := flag.Bool("migrate", false, "run the migrations")
-	rollbackCmd := flag.Bool("rollback", false, "rollback the migrations")
-	refreshCmd := flag.Bool("refresh", false, "refresh the migrations (rollback and then migrate)")
 	configFile := flag.String("cfg", "./tern.yaml", "tern configuration file")
 
-	versionFormat := flag.String("version-format", "timestamp", "Version format, that can be a timestamp or a datetime")
+	createCmd := flag.String("create", "", "create new migration")
 	noRollback := flag.Bool("no-rollback", false, "Create a new migration without a rollback")
+
+	migrateCmd := flag.Bool("migrate", false, "run the migrations")
+	rollbackCmd := flag.Bool("rollback", false, "rollback the migrations")
+	refreshCmd := flag.Bool("refresh", false, "refresh the migrations (rollback and then migrate again)")
+
+	timeout := flag.Int("timeout", defaultTimeout, "max timeout")
+	steps := flag.Int("steps", 0, "steps to execute")
 
 	flag.Parse()
 
@@ -31,13 +35,13 @@ func main() {
 	}
 
 	if *configFile == "" {
-		fmt.Println(aurora.Red("tern-cli: "), "Config file not specified")
+		red("Config file not specified")
 		os.Exit(1)
 	}
 
 	app, closer, err := cli.NewFromYaml(*configFile)
 	if err != nil {
-		fmt.Println(aurora.Red("tern-cli: "), err.Error())
+		red(err.Error())
 		os.Exit(1)
 	}
 
@@ -47,64 +51,94 @@ func main() {
 		}
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second) // fixme
-	defer cancel()
-
 	if *createCmd != "" {
-		var vf migration.VersionFormat
-		if *versionFormat == "timestamp" {
-			vf = migration.TimestampFormat
-		} else {
-			vf = migration.DatetimeFormat
-		}
-
-		m, err := app.CreateMigration(*createCmd, vf, !*noRollback);
-		if err != nil {
-			fmt.Println(aurora.Red("tern-cli: "), err.Error())
-			os.Exit(1)
-		}
-
-		fmt.Println(aurora.Green("tern-cli: "), "Created migration " + m.Key)
-		os.Exit(0)
+		createMigration(app, createCmd, noRollback)
 	}
 
 	if *migrateCmd {
-		if err := app.Migrate(ctx, cli.ActionConfig{}); err != nil {
-			if errors.Is(err, database.ErrNothingToMigrate) {
-				fmt.Println(aurora.Green("tern-cli: "), "Nothing to migrate")
-				os.Exit(0)
-			}
-
-			fmt.Println(aurora.Red("tern-cli: "), err.Error())
-			os.Exit(1)
-		}
-
-		fmt.Println(aurora.Green("tern-cli: "), "all done")
-		os.Exit(0)
+		migrate(app, *steps, *timeout)
 	}
 
 	if *rollbackCmd {
-		if err := app.Refresh(ctx, cli.ActionConfig{}); err != nil {
-			fmt.Println(aurora.Red("tern-cli: "), err.Error())
-			os.Exit(1)
-		}
-
-		fmt.Println(aurora.Green("tern-cli: "), "all done")
-		os.Exit(0)
+		rollback(app, *steps, *timeout)
 	}
 
 	if *refreshCmd {
-		if err := app.Refresh(ctx, cli.ActionConfig{}); err != nil {
-			fmt.Println(aurora.Red("tern-cli: "), err.Error())
-			os.Exit(1)
-		}
-
-		fmt.Println(aurora.Green("tern-cli: "), "all done")
-		os.Exit(0)
+		refresh(app, *steps, *timeout)
 	}
 
-	red("Unknown command")
+	red("You need to choose on of commands: init-cfg, create, migrate, rollback, refresh")
 	os.Exit(1)
+}
+
+func refresh(app *cli.App, steps, timeout int) {
+	if timeout <= 0 {
+		red("refresh timeout must be a positive integer or simply be omitted")
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	if err := app.Rollback(ctx, cli.ActionConfig{Steps: steps}); err != nil {
+		red(err.Error())
+		os.Exit(1)
+	}
+
+	green("Migration refresh completed. All done...")
+	os.Exit(0)
+}
+
+func rollback(app *cli.App, steps, timeout int) {
+	if timeout <= 0 {
+		red("rollback timeout must be a positive integer or simply be omitted")
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	if err := app.Rollback(ctx, cli.ActionConfig{Steps: steps}); err != nil {
+		red(err.Error())
+		os.Exit(1)
+	}
+
+	green("Migration rollback completed. All done...")
+	os.Exit(0)
+}
+
+func migrate(app *cli.App, steps, timeout int) {
+	if timeout <= 0 {
+		red("migrate timeout must be a positive integer or simply be omitted")
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	if err := app.Migrate(ctx, cli.ActionConfig{Steps: steps}); err != nil {
+		if errors.Is(err, database.ErrNothingToMigrate) {
+			fmt.Println(aurora.Green("tern-cli: "), "Nothing to migrate")
+			os.Exit(0)
+		}
+
+		red(err.Error())
+		os.Exit(1)
+	}
+
+	green("Migration complete. All done...")
+	os.Exit(0)
+}
+
+func createMigration(app *cli.App, createCmd *string, noRollback *bool) {
+	m, err := app.CreateMigration(*createCmd, !*noRollback)
+	if err != nil {
+		fmt.Println(aurora.Red("tern-cli: "), err.Error())
+		os.Exit(1)
+	}
+
+	fmt.Println(aurora.Green("tern-cli: "), "Created migration "+m.Key)
+	os.Exit(0)
 }
 
 func createConfigFile(filename string) {

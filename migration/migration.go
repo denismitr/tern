@@ -11,12 +11,12 @@ import (
 var ErrInvalidTimestamp = errors.New("invalid timestamp in migration filename")
 
 type (
-	VersionFormat int
+	VersionFormat string
 
 	Version struct {
-		Format    VersionFormat
-		Timestamp string
-		CreatedAt time.Time
+		Format     VersionFormat
+		Timestamp  string
+		MigratedAt time.Time
 	}
 
 	Migration struct {
@@ -31,17 +31,17 @@ type (
 )
 
 const (
-	TimestampFormat VersionFormat = iota
-	DatetimeFormat
+	TimestampFormat VersionFormat = "timestamp"
+	DatetimeFormat  VersionFormat = "datetime"
 )
 
-func NewMigrationFromDB(timestamp string, createdAt time.Time, name string) *Migration {
+func NewMigrationFromDB(timestamp string, migratedAt time.Time, name string) *Migration {
 	return &Migration{
 		Key:  CreateKeyFromTimestampAndName(timestamp, name),
 		Name: name,
 		Version: Version{
-			Timestamp: timestamp,
-			CreatedAt: createdAt,
+			Timestamp:  timestamp,
+			MigratedAt: migratedAt,
 		},
 	}
 }

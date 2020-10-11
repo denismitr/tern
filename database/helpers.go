@@ -18,7 +18,7 @@ func inVersions(version migration.Version, versions []migration.Version) bool {
 }
 
 func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, error) {
-	rows, err := tx.Query(fmt.Sprintf("SELECT version, created_at FROM %s", migrationsTable))
+	rows, err := tx.Query(fmt.Sprintf("SELECT version, migrated_at FROM %s", migrationsTable))
 	if err != nil {
 		return nil, err
 	}
@@ -27,12 +27,12 @@ func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, erro
 
 	for rows.Next() {
 		var timestamp string
-		var createdAt time.Time
-		if err := rows.Scan(&timestamp, &createdAt); err != nil {
+		var migratedAt time.Time
+		if err := rows.Scan(&timestamp, &migratedAt); err != nil {
 			rows.Close()
 			return result, err
 		}
-		result = append(result, migration.Version{Timestamp: timestamp, CreatedAt: createdAt})
+		result = append(result, migration.Version{Timestamp: timestamp, MigratedAt: migratedAt})
 	}
 
 	return result, nil

@@ -14,8 +14,9 @@ import (
 
 var (
 	ErrMigrationAlreadyExists = errors.New("migration already exists")
-	ErrFolderInvalid = errors.New("migrations folder is invalid")
-	ErrSourceTypeIsNotValid = errors.New("source type is not valid")
+	ErrFolderInvalid          = errors.New("migrations folder is invalid")
+	ErrSourceTypeIsNotValid   = errors.New("source type is not valid")
+	ErrInvalidVersionFormat   = errors.New("invalid version format: allowed formats are datetime and timestamp")
 )
 
 type (
@@ -24,6 +25,7 @@ type (
 	Config struct {
 		DatabaseUrl      string
 		MigrationsFolder string
+		VersionFormat    migration.VersionFormat
 	}
 
 	ActionConfig struct {
@@ -35,6 +37,7 @@ type (
 	App struct {
 		source   source.Source
 		migrator *tern.Migrator
+		vf       migration.VersionFormat
 	}
 )
 
@@ -59,21 +62,21 @@ func New(cfg Config) (*App, CloserFunc, error) {
 	}
 
 	return &App{
-		source: s,
+		source:   s,
 		migrator: m,
+		vf:       cfg.VersionFormat,
 	}, CloserFunc(closer), nil
 }
 
 func (app *App) CreateMigration(
 	name string,
-	vf migration.VersionFormat,
 	withRollback bool,
 ) (*migration.Migration, error) {
 	if !app.source.IsValid() {
 		return nil, ErrFolderInvalid
 	}
 
-	v := migration.GenerateVersion(time.Now, vf)
+	v := migration.GenerateVersion(time.Now, app.vf)
 
 	if app.source.AlreadyExists(v.Timestamp, name) {
 		return nil, errors.Wrapf(ErrMigrationAlreadyExists, "dt [%s] name [%s]", v.Timestamp, name)

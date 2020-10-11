@@ -2,11 +2,12 @@ package cli
 
 import (
 	"github.com/denismitr/tern"
+	"github.com/denismitr/tern/migration"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
-	_ "github.com/go-sql-driver/mysql"
-	_ "github.com/mattn/go-sqlite3"
 	"io/ioutil"
 	"log"
 	"os"
@@ -17,15 +18,20 @@ type (
 	migratorFactory    func(cfg Config) (*tern.Migrator, tern.CloserFunc, error)
 	migratorFactoryMap map[string]migratorFactory
 
-	paths struct {
-		LocalFolder string `yaml:"local_folder"`
-		DatabaseURL string `yaml:"database_url"`
+	migrations struct {
+		LocalFolder   string `yaml:"local_folder"`
+		DatabaseURL   string `yaml:"database_url"`
+		VersionFormat string `yaml:"version_format"`
 	}
 
 	configFile struct {
-		Version string `yaml:"version"`
-		Paths   paths  `yaml:"paths"`
+		Version    string     `yaml:"version"`
+		Migrations migrations `yaml:"migrations"`
 	}
+)
+
+var (
+	allowedVersionFormats = []migration.VersionFormat{migration.TimestampFormat, migration.DatetimeFormat}
 )
 
 func createConfigFromYaml(path string) (Config, error) {
@@ -35,7 +41,11 @@ func createConfigFromYaml(path string) (Config, error) {
 		return cfg, errors.Wrap(err, "could not open tern configuration file")
 	}
 
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	b, err := ioutil.ReadAll(f)
 	if err != nil {
@@ -47,16 +57,16 @@ func createConfigFromYaml(path string) (Config, error) {
 		return cfg, errors.Wrap(err, "could not parse tern configuration file")
 	}
 
-	if strings.HasSuffix(cfgFile.Paths.DatabaseURL, "%%") && strings.HasPrefix(cfgFile.Paths.DatabaseURL, "%%") {
-		cfg.DatabaseUrl = os.Getenv(strings.ReplaceAll(cfgFile.Paths.DatabaseURL, "%%", ""))
+	if strings.HasSuffix(cfgFile.Migrations.DatabaseURL, "%%") && strings.HasPrefix(cfgFile.Migrations.DatabaseURL, "%%") {
+		cfg.DatabaseUrl = os.Getenv(strings.ReplaceAll(cfgFile.Migrations.DatabaseURL, "%%", ""))
 	} else {
-		cfg.DatabaseUrl = cfgFile.Paths.DatabaseURL
+		cfg.DatabaseUrl = cfgFile.Migrations.DatabaseURL
 	}
 
-	if strings.HasSuffix(cfgFile.Paths.LocalFolder, "%%") && strings.HasPrefix(cfgFile.Paths.LocalFolder, "%%") {
-		cfg.MigrationsFolder = os.Getenv(strings.ReplaceAll(cfgFile.Paths.LocalFolder, "%%", ""))
+	if strings.HasSuffix(cfgFile.Migrations.LocalFolder, "%%") && strings.HasPrefix(cfgFile.Migrations.LocalFolder, "%%") {
+		cfg.MigrationsFolder = os.Getenv(strings.ReplaceAll(cfgFile.Migrations.LocalFolder, "%%", ""))
 	} else {
-		cfg.MigrationsFolder = cfgFile.Paths.LocalFolder
+		cfg.MigrationsFolder = cfgFile.Migrations.LocalFolder
 	}
 
 	if cfg.DatabaseUrl == "" {
@@ -65,6 +75,16 @@ func createConfigFromYaml(path string) (Config, error) {
 
 	if cfg.MigrationsFolder == "" {
 		return cfg, errors.New("migrations folder was not defined")
+	}
+
+	for _, format := range allowedVersionFormats {
+		if string(format) == cfgFile.Migrations.VersionFormat {
+			cfg.VersionFormat = format
+		}
+	}
+
+	if cfg.VersionFormat == "" {
+		return cfg, ErrInvalidVersionFormat
 	}
 
 	return cfg, nil

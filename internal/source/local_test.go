@@ -27,7 +27,7 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 	m, err := c.readOne(key)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "1596897167", m.Version.Timestamp)
+	assert.Equal(t, "1596897167", m.Version.Value)
 	assert.Equal(t, "Create foo table", m.Name)
 	assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"}, m.Migrate)
 	assert.Equal(t, []string{"DROP TABLE IF EXISTS foo;"}, m.Rollback)
@@ -52,19 +52,19 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		assert.Len(t, migrations, 3)
 
 		assert.Equal(t, "Create foo table", migrations[0].Name)
-		assert.Equal(t, "1596897167", migrations[0].Version.Timestamp)
+		assert.Equal(t, "1596897167", migrations[0].Version.Value)
 		assert.Equal(t, "1596897167_create_foo_table", migrations[0].Key)
 		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[0].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS foo;"}, migrations[0].Rollback)
 
 		assert.Equal(t, "Create bar table", migrations[1].Name)
-		assert.Equal(t, "1596897188", migrations[1].Version.Timestamp)
+		assert.Equal(t, "1596897188", migrations[1].Version.Value)
 		assert.Equal(t, "1596897188_create_bar_table", migrations[1].Key)
 		assert.Equal(t, []string{"CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[1].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS bar;"}, migrations[1].Rollback)
 
 		assert.Equal(t, "Create baz table", migrations[2].Name)
-		assert.Equal(t, "1597897177", migrations[2].Version.Timestamp)
+		assert.Equal(t, "1597897177", migrations[2].Version.Value)
 		assert.Equal(t, "1597897177_create_baz_table", migrations[2].Key)
 		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"}, migrations[2].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS baz;"}, migrations[2].Rollback)
@@ -80,13 +80,13 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		assert.Len(t, migrations, 2)
 
 		assert.Equal(t, "Create bar table", migrations[0].Name)
-		assert.Equal(t, "1596897188", migrations[0].Version.Timestamp)
+		assert.Equal(t, "1596897188", migrations[0].Version.Value)
 		assert.Equal(t, "1596897188_create_bar_table", migrations[0].Key)
 		assert.Equal(t, []string{"CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[0].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS bar;"}, migrations[0].Rollback)
 
 		assert.Equal(t, "Create baz table", migrations[1].Name)
-		assert.Equal(t, "1597897177", migrations[1].Version.Timestamp)
+		assert.Equal(t, "1597897177", migrations[1].Version.Value)
 		assert.Equal(t, "1597897177_create_baz_table", migrations[1].Key)
 		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"}, migrations[1].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS baz;"}, migrations[1].Rollback)
@@ -131,7 +131,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		t.Run(fmt.Sprintf("valid-timestanps-%s", tc.in), func(t *testing.T) {
 			out, err := c.extractVersionFromKey(tc.in)
 			assert.NoError(t, err)
-			assert.Equal(t, tc.out, out.Timestamp)
+			assert.Equal(t, tc.out, out.Value)
 		})
 	}
 
@@ -142,7 +142,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 			out, err := c.extractVersionFromKey(tc.in)
 			assert.Error(t, err)
 			assert.True(t, errors.Is(tc.err, err))
-			assert.Equal(t, "", out.Timestamp)
+			assert.Equal(t, "", out.Value)
 		})
 	}
 }

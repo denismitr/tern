@@ -79,9 +79,9 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		assert.Len(t, versions, 3)
 
-		assert.Equal(t, "1596897167", versions[0].Timestamp)
-		assert.Equal(t, "1596897188", versions[1].Timestamp)
-		assert.Equal(t, "1597897177", versions[2].Timestamp)
+		assert.Equal(t, "1596897167", versions[0].Value)
+		assert.Equal(t, "1596897188", versions[1].Value)
+		assert.Equal(t, "1597897177", versions[2].Value)
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
@@ -128,8 +128,8 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		// given we have already migrated these 2 migrations
 		existingMigrations := migration.Migrations(
 			[]*migration.Migration{
-				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: migration.Version{Timestamp: "1596897167"}},
-				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: migration.Version{Timestamp:"1596897188"}},
+				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: migration.Version{Value: "1596897167"}},
+				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: migration.Version{Value: "1596897188"}},
 			},
 		)
 
@@ -154,9 +154,9 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// expect 3 versions in migrations table
 		assert.Len(t, versions, 3)
-		assert.Equal(t, "1596897167", versions[0].Timestamp)
-		assert.Equal(t, "1596897188", versions[1].Timestamp)
-		assert.Equal(t, "1597897177", versions[2].Timestamp)
+		assert.Equal(t, "1596897167", versions[0].Value)
+		assert.Equal(t, "1596897188", versions[1].Value)
+		assert.Equal(t, "1597897177", versions[2].Value)
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
@@ -229,9 +229,9 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// expect 3 versions in migrations table
 		assert.Len(t, versions, 3)
-		assert.Equal(t, "1596897167", versions[0].Timestamp)
-		assert.Equal(t, "1596897188", versions[1].Timestamp)
-		assert.Equal(t, "1597897177", versions[2].Timestamp)
+		assert.Equal(t, "1596897167", versions[0].Value)
+		assert.Equal(t, "1596897188", versions[1].Value)
+		assert.Equal(t, "1597897177", versions[2].Value)
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
@@ -289,7 +289,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// expect 3 versions in migrations table
 		assert.Len(t, versions, 1)
-		assert.Equal(t, "1596897167", versions[0].Timestamp)
+		assert.Equal(t, "1596897167", versions[0].Value)
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
@@ -347,7 +347,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// expect 3 versions in migrations table
 		assert.Len(t, versions, 1)
-		assert.Equal(t, "1596897188", versions[0].Timestamp)
+		assert.Equal(t, "1596897188", versions[0].Value)
 
 		tables, err := gateway.ShowTables(ctx)
 		if err != nil {
@@ -405,9 +405,9 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		assert.Len(t, versions, 3)
 
-		assert.Equal(t, "1596897167", versions[0].Timestamp)
-		assert.Equal(t, "1596897188", versions[1].Timestamp)
-		assert.Equal(t, "1597897177", versions[2].Timestamp)
+		assert.Equal(t, "1596897167", versions[0].Value)
+		assert.Equal(t, "1596897188", versions[1].Value)
+		assert.Equal(t, "1597897177", versions[2].Value)
 
 		// expect 4 tables to exist still in the DB
 		// migrations table and 3 tables created by scripts
@@ -470,7 +470,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		}
 
 		assert.Len(t, versionsAfterRollback, 1)
-		assert.Equal(t, "1596897167", versionsAfterRollback[0].Timestamp)
+		assert.Equal(t, "1596897167", versionsAfterRollback[0].Value)
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
@@ -556,9 +556,9 @@ func TestInMemorySourceMigrations(t *testing.T) {
 
 		assert.Len(t, versions, 3)
 
-		assert.Equal(t, "1596897167", versions[0].Timestamp)
-		assert.Equal(t, "1596897188", versions[1].Timestamp)
-		assert.Equal(t, "1597897177", versions[2].Timestamp)
+		assert.Equal(t, "1596897167", versions[0].Value)
+		assert.Equal(t, "1596897188", versions[1].Value)
+		assert.Equal(t, "1597897177", versions[2].Value)
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
@@ -648,9 +648,9 @@ func TestInMemorySourceMigrations(t *testing.T) {
 
 		assert.Len(t, versions, 3)
 
-		assert.Equal(t, "1596897167", versions[0].Timestamp)
-		assert.Equal(t, "1596897188", versions[1].Timestamp)
-		assert.Equal(t, "1597897177", versions[2].Timestamp)
+		assert.Equal(t, "1596897167", versions[0].Value)
+		assert.Equal(t, "1596897188", versions[1].Value)
+		assert.Equal(t, "1597897177", versions[2].Value)
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
@@ -755,9 +755,9 @@ func TestInMemorySourceMigrations(t *testing.T) {
 
 		assert.Len(t, versions, 3)
 
-		assert.Equal(t, "1596897167", versions[0].Timestamp)
-		assert.Equal(t, "1596897188", versions[1].Timestamp)
-		assert.Equal(t, "1597897177", versions[2].Timestamp)
+		assert.Equal(t, "1596897167", versions[0].Value)
+		assert.Equal(t, "1596897188", versions[1].Value)
+		assert.Equal(t, "1597897177", versions[2].Value)
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts

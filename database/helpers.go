@@ -9,7 +9,7 @@ import (
 
 func inVersions(version migration.Version, versions []migration.Version) bool {
 	for _, v := range versions {
-		if v.Timestamp == version.Timestamp {
+		if v.Value == version.Value {
 			return true
 		}
 	}
@@ -32,7 +32,7 @@ func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, erro
 			rows.Close()
 			return result, err
 		}
-		result = append(result, migration.Version{Timestamp: timestamp, MigratedAt: migratedAt})
+		result = append(result, migration.Version{Value: timestamp, MigratedAt: migratedAt})
 	}
 
 	return result, nil

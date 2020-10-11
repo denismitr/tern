@@ -76,13 +76,15 @@ func (app *App) CreateMigration(
 		return nil, ErrFolderInvalid
 	}
 
+	name = strings.ReplaceAll(name, "-", "_")
+
 	v := migration.GenerateVersion(time.Now, app.vf)
 
-	if app.source.AlreadyExists(v.Timestamp, name) {
-		return nil, errors.Wrapf(ErrMigrationAlreadyExists, "dt [%s] name [%s]", v.Timestamp, name)
+	if app.source.AlreadyExists(v.Value, name) {
+		return nil, errors.Wrapf(ErrMigrationAlreadyExists, "dt [%s] name [%s]", v.Value, name)
 	}
 
-	return app.source.Create(v.Timestamp, name, withRollback)
+	return app.source.Create(v.Value, name, withRollback)
 }
 
 func (app *App) Migrate(ctx context.Context, cfg ActionConfig) error {

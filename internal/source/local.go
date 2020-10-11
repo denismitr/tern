@@ -25,7 +25,7 @@ const (
 	defaultRollbackFileFullExtension = ".rollback.sql"
 
 	timestampBasedVersionFormat = `^(?P<version>\d{9,11})(_\w+)?$`
-	timestampBasedNameFormat = `^\d{9,11}_(?P<name>\w+[\w_-]+)?$`
+	timestampBasedNameFormat = `^\d{9,12}_(?P<name>\w+[\w_-]+)?$`
 	datetimeBasedVersionFormat = `^(?P<version>\d{14})(_\w+)?$`
 	datetimeBasedNameFormat = `^\d{14}_(?P<name>\w+[\w_-]+)?$`
 )
@@ -55,7 +55,7 @@ func (c *LocalFSConverter) Create(dt, name string, withRollback bool) (*migratio
 		Key: key,
 		Name: name,
 		Version: migration.Version{
-			Timestamp: dt,
+			Value: dt,
 		},
 	}
 
@@ -261,7 +261,7 @@ func (c *LocalFSConverter) extractVersionFromKey(key string) (migration.Version,
 		return result, ErrInvalidTimestamp
 	}
 
-	result.Timestamp = matches[1]
+	result.Value = matches[1]
 
 	return result, nil
 }

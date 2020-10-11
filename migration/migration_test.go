@@ -56,28 +56,28 @@ func Test_MigrationCanAssembleScriptsInOne(t *testing.T) {
 
 func Test_MigrationsCanBeSortedByVersion(t *testing.T) {
 	m1 := &Migration{
-		Version:  Version{Timestamp: "1596897167"},
+		Version:  Version{Value: "1596897167"},
 		Name:     "Foo migration",
 		Migrate:  []string{"CREATE foo"},
 		Rollback: []string{"DROP foo"},
 	}
 
 	m2 := &Migration{
-		Version:  Version{Timestamp: "1586897167"},
+		Version:  Version{Value: "1586897167"},
 		Name:     "Bar migration",
 		Migrate:  []string{"CREATE bar"},
 		Rollback: []string{"DROP bar"},
 	}
 
 	m3 := &Migration{
-		Version:  Version{Timestamp: "1597897167"},
+		Version:  Version{Value: "1597897167"},
 		Name:     "Baz migration",
 		Migrate:  []string{"CREATE baz"},
 		Rollback: []string{"DROP baz"},
 	}
 
 	m4 := &Migration{
-		Version:  Version{Timestamp: "1577897167"},
+		Version:  Version{Value: "1577897167"},
 		Name:     "FooBaz migration",
 		Migrate:  []string{"CREATE foo_baz"},
 		Rollback: []string{"DROP foo_baz"},
@@ -101,9 +101,9 @@ func Test_GenerateVersion_InTimestampFormat(t *testing.T) {
 
 	versionTs := GenerateVersion(cf, TimestampFormat)
 	assert.Equal(t, versionTs.Format, TimestampFormat)
-	assert.Equal(t, "1546449499", versionTs.Timestamp)
+	assert.Equal(t, "1546449499", versionTs.Value)
 
 	versionDt := GenerateVersion(cf, DatetimeFormat)
 	assert.Equal(t, versionDt.Format, DatetimeFormat)
-	assert.Equal(t, "20190102171819", versionDt.Timestamp)
+	assert.Equal(t, "20190102171819", versionDt.Value)
 }

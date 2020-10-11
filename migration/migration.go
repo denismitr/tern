@@ -8,14 +8,14 @@ import (
 	"time"
 )
 
-var ErrInvalidTimestamp = errors.New("invalid timestamp in migration filename")
+var ErrInvalidVersionFormat = errors.New("invalid version format")
 
 type (
 	VersionFormat string
 
 	Version struct {
 		Format     VersionFormat
-		Timestamp  string
+		Value      string
 		MigratedAt time.Time
 	}
 
@@ -33,17 +33,26 @@ type (
 const (
 	TimestampFormat VersionFormat = "timestamp"
 	DatetimeFormat  VersionFormat = "datetime"
+
+	MaxTimestampLength = 12
+	MinTimestampLength = 9
 )
 
-func NewMigrationFromDB(timestamp string, migratedAt time.Time, name string) *Migration {
-	return &Migration{
-		Key:  CreateKeyFromTimestampAndName(timestamp, name),
+func NewMigrationFromDB(version string, migratedAt time.Time, name string) *Migration {
+	m := &Migration{
+		Key:  CreateKeyFromTimestampAndName(version, name),
 		Name: name,
 		Version: Version{
-			Timestamp:  timestamp,
+			Value:      version,
 			MigratedAt: migratedAt,
 		},
 	}
+
+	if err := SetVersionFormat(m); err != nil {
+		panic(err) // todo
+	}
+
+	return m
 }
 
 func NewMigrationFromFile(
@@ -62,16 +71,22 @@ func NewMigrationFromFile(
 	}, nil
 }
 
-func New(timestamp, name string, migrate, rollback []string) *Migration {
-	return &Migration{
-		Key:  CreateKeyFromTimestampAndName(timestamp, name),
+func New(version, name string, migrate, rollback []string) *Migration {
+	m := &Migration{
+		Key:  CreateKeyFromTimestampAndName(version, name),
 		Name: name,
 		Version: Version{
-			Timestamp: timestamp,
+			Value:  version,
 		},
 		Migrate:  migrate,
 		Rollback: rollback,
 	}
+
+	if err := SetVersionFormat(m); err != nil {
+		panic(err) // todo
+	}
+
+	return m
 }
 
 func (m *Migration) MigrateScripts() string {
@@ -124,7 +139,7 @@ func (m Migrations) Len() int {
 }
 
 func (m Migrations) Less(i, j int) bool {
-	return m[i].Version.Timestamp < m[j].Version.Timestamp
+	return m[i].Version.Value < m[j].Version.Value
 }
 
 func (m Migrations) Swap(i, j int) {
@@ -139,18 +154,30 @@ func CreateKeyFromTimestampAndName(timestamp, name string) string {
 	return result.String()
 }
 
-func GenerateVersion(cf ClockFunc, f VersionFormat) Version {
+func GenerateVersion(cf ClockFunc, vf VersionFormat) Version {
 	var v Version
 
-	v.Format = f
+	v.Format = vf
 	if v.Format == TimestampFormat {
-		v.Timestamp = strconv.Itoa(int(cf().Unix()))
+		v.Value = strconv.Itoa(int(cf().Unix()))
 	} else {
-		v.Timestamp = cf().Format("2006-01-02 15:04:05")
-		v.Timestamp = strings.ReplaceAll(v.Timestamp, "-", "")
-		v.Timestamp = strings.ReplaceAll(v.Timestamp, ":", "")
-		v.Timestamp = strings.ReplaceAll(v.Timestamp, " ", "")
+		v.Value = cf().Format("2006-01-02 15:04:05")
+		v.Value = strings.ReplaceAll(v.Value, "-", "")
+		v.Value = strings.ReplaceAll(v.Value, ":", "")
+		v.Value = strings.ReplaceAll(v.Value, " ", "")
 	}
 
 	return v
+}
+
+func SetVersionFormat(m *Migration) error {
+	if len(m.Version.Value) > MinTimestampLength && len(m.Version.Value) <= MaxTimestampLength {
+		m.Version.Format = TimestampFormat
+	} else if len(m.Version.Value) > MaxTimestampLength {
+		m.Version.Format = DatetimeFormat
+	} else {
+		return errors.Wrapf(ErrInvalidVersionFormat, "%s", m.Version.Value)
+	}
+
+	return nil
 }

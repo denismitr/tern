@@ -223,7 +223,7 @@ func (db *dbh) migrateAll(ctx context.Context, migrations migration.Migrations, 
 }
 
 func (db *dbh) migrateOne(ctx context.Context, tx ctxExecutor, migration *migration.Migration, insertQuery string) error {
-	if migration.Version.Timestamp == "" {
+	if migration.Version.Value == "" {
 		return ErrMigrationVersionNotSpecified
 	}
 
@@ -233,13 +233,13 @@ func (db *dbh) migrateOne(ctx context.Context, tx ctxExecutor, migration *migrat
 		return errors.Wrapf(err, "could not run migration [%s]", migration.Key)
 	}
 
-	db.lg.SQL(insertQuery, migration.Version.Timestamp, migration.Name)
+	db.lg.SQL(insertQuery, migration.Version.Value, migration.Name)
 
-	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version.Timestamp, migration.Name); err != nil {
+	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version.Value, migration.Name); err != nil {
 		return errors.Wrapf(
 			err,
 			"could not insert migration version [%s]",
-			migration.Version.Timestamp,
+			migration.Version.Value,
 		)
 	}
 
@@ -287,7 +287,7 @@ func (db *dbh) rollbackAll(ctx context.Context, migrations migration.Migrations,
 }
 
 func (db *dbh) rollbackOne(ctx context.Context, ex ctxExecutor, migration *migration.Migration, removeVersionQuery string) error {
-	if migration.Version.Timestamp == "" {
+	if migration.Version.Value == "" {
 		return ErrMigrationVersionNotSpecified
 	}
 
@@ -299,13 +299,13 @@ func (db *dbh) rollbackOne(ctx context.Context, ex ctxExecutor, migration *migra
 		}
 	}
 
-	db.lg.SQL(removeVersionQuery, migration.Version.Timestamp)
+	db.lg.SQL(removeVersionQuery, migration.Version.Value)
 
-	if _, err := ex.ExecContext(ctx, removeVersionQuery, migration.Version.Timestamp); err != nil {
+	if _, err := ex.ExecContext(ctx, removeVersionQuery, migration.Version.Value); err != nil {
 		return errors.Wrapf(
 			err,
 			"could not remove migration version [%s]",
-			migration.Version.Timestamp,
+			migration.Version.Value,
 		)
 	}
 
@@ -410,7 +410,7 @@ func (db *dbh) writeVersions(ctx context.Context, migrations migration.Migration
 
 	for i := range migrations {
 		name := migrations[i].Name
-		timestamp := migrations[i].Version.Timestamp
+		timestamp := migrations[i].Version.Value
 		if _, err := db.conn.ExecContext(ctx, query, timestamp, name); err != nil {
 			_ = tx.Rollback() // fixme
 			return errors.Wrapf(err, "could not insert migration with version [%s] and name [%s] to [%s] table", timestamp, name, db.migrationsTable)

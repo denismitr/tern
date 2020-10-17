@@ -1,6 +1,8 @@
 # TERN
 ## Another GO migrator
 
+## Version 1.*
+
 ### Supported databases - MySQL, Sqlite
 Postgres is TODO, PRs are welcomed (with tests!!!)
 

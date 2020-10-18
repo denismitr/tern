@@ -72,7 +72,7 @@ That will refresh (rollback and migrate again) the latest 2 migrations, and will
 #### MySQL and sqlx
 
 ```go
-db, err := sqlx.Open("mysql", testConnection)
+db, err := sqlx.Open("mysql", "username:secret@(127.0.0.1:33066)/my_db_name?parseTime=true")
 if err != nil {
     panic(err)
 }
@@ -114,7 +114,7 @@ Apart from `Migrate` command, there are `Rollback` and `Refresh` commands.
 ```go
     source := tern.UseInMemorySource(
 		migration.New(
-			"20201011221745",
+			"20201011221745", // datetime or timestamp must be valid otherwise New panics
 			"Create foo table",
 			[]string{createFooTable}, // constant
 			[]string{"DROP TABLE IF EXISTS foo;"},

@@ -8,11 +8,11 @@ import (
 
 var ErrNoMigrations = errors.New("no migrations")
 
-type InMemoryConverter struct {
+type InMemorySource struct {
 	migrations migration.Migrations
 }
 
-func (c *InMemoryConverter) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
+func (c *InMemorySource) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
 	if c.migrations == nil {
 		return nil, ErrNoMigrations
 	}
@@ -20,8 +20,13 @@ func (c *InMemoryConverter) Select(ctx context.Context, f Filter) (migration.Mig
 	return c.migrations, nil
 }
 
-func NewInMemorySource(migrations ...*migration.Migration) *InMemoryConverter {
-	return &InMemoryConverter{
-		migrations: migrations,
+func NewInMemorySource(factories ...migration.Factory) (*InMemorySource, error) {
+	m, err := migration.NewMigrations(factories...)
+	if err != nil {
+		return nil, err
 	}
+
+	return &InMemorySource{
+		migrations: m,
+	}, nil
 }

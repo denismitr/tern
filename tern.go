@@ -25,6 +25,7 @@ type Migrator struct {
 // are required a number of defaults will be applied
 func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 	m := new(Migrator)
+	m.lg = &logger.NullLogger{}
 
 	for _, oFunc := range opts {
 		if err := oFunc(m); err != nil {
@@ -38,7 +39,12 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 
 	// Default selector implementation
 	if m.selector == nil {
-		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder, migration.TimestampFormat)
+		localFsConverter, err := source.NewLocalFSSource(
+			source.DefaultMigrationsFolder,
+			m.lg,
+			migration.TimestampFormat,
+		)
+
 		if gatewayErr := m.gateway.Close(); gatewayErr != nil {
 			return nil, nil, errors.Wrap(err, gatewayErr.Error())
 		}
@@ -48,10 +54,6 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 		}
 
 		m.selector = localFsConverter
-	}
-
-	if m.lg == nil {
-		m.lg = &logger.NullLogger{}
 	}
 
 	m.gateway.SetLogger(m.lg)

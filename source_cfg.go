@@ -15,13 +15,13 @@ type (
 
 func UseLocalFolderSource(folder string, configurators ...SourceConfigurator) OptionFunc {
 	var sc sourceConfig
-	sc.versionFormat = migration.TimestampFormat
+	sc.versionFormat = migration.AnyFormat
 	for _, c := range configurators {
 		c(&sc)
 	}
 
 	return func(m *Migrator) error {
-		conv, err := source.NewLocalFSSource(folder, sc.versionFormat)
+		conv, err := source.NewLocalFSSource(folder, m.lg, sc.versionFormat)
 		if err != nil {
 			return err
 		}
@@ -31,11 +31,14 @@ func UseLocalFolderSource(folder string, configurators ...SourceConfigurator) Op
 	}
 }
 
-func UseInMemorySource(migrations ...*migration.Migration) OptionFunc {
+func UseInMemorySource(factories ...migration.Factory) OptionFunc {
 	return func(m *Migrator) error {
-		conv := source.NewInMemorySource(migrations...)
+		s, err := source.NewInMemorySource(factories...)
+		if err != nil {
+			return err
+		}
 
-		m.selector = conv
+		m.selector = s
 		return nil
 	}
 }

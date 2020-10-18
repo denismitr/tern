@@ -28,31 +28,35 @@ type (
 	}
 
 	ClockFunc func() time.Time
+	Factory func() (*Migration, error)
 )
 
 const (
 	TimestampFormat VersionFormat = "timestamp"
 	DatetimeFormat  VersionFormat = "datetime"
+	AnyFormat       VersionFormat = "any"
 
 	MaxTimestampLength = 12
 	MinTimestampLength = 9
 )
 
-func NewMigrationFromDB(version string, migratedAt time.Time, name string) *Migration {
-	m := &Migration{
-		Key:  CreateKeyFromTimestampAndName(version, name),
-		Name: name,
-		Version: Version{
-			Value:      version,
-			MigratedAt: migratedAt,
-		},
-	}
+func NewMigrationFromDB(version string, migratedAt time.Time, name string) Factory {
+	return func() (*Migration, error) {
+		m := &Migration{
+			Key:  CreateKeyFromTimestampAndName(version, name),
+			Name: name,
+			Version: Version{
+				Value:      version,
+				MigratedAt: migratedAt,
+			},
+		}
 
-	if err := SetVersionFormat(m); err != nil {
-		panic(err) // todo
-	}
+		if err := SetVersionFormat(m); err != nil {
+			return nil, err
+		}
 
-	return m
+		return m, nil
+	}
 }
 
 func NewMigrationFromFile(
@@ -61,32 +65,36 @@ func NewMigrationFromFile(
 	version Version,
 	migrate string,
 	rollback string,
-) (*Migration, error) {
-	return &Migration{
-		Key:      key,
-		Name:     name,
-		Version:  version,
-		Migrate:  []string{migrate},
-		Rollback: []string{rollback},
-	}, nil
+) Factory {
+	return func() (*Migration, error) {
+		return &Migration{
+			Key:      key,
+			Name:     name,
+			Version:  version,
+			Migrate:  []string{migrate},
+			Rollback: []string{rollback},
+		}, nil
+	}
 }
 
-func New(version, name string, migrate, rollback []string) *Migration {
-	m := &Migration{
-		Key:  CreateKeyFromTimestampAndName(version, name),
-		Name: name,
-		Version: Version{
-			Value:  version,
-		},
-		Migrate:  migrate,
-		Rollback: rollback,
-	}
+func New(version, name string, migrate, rollback []string) Factory {
+	return func() (*Migration, error) {
+		m := &Migration{
+			Key:  CreateKeyFromTimestampAndName(version, name),
+			Name: name,
+			Version: Version{
+				Value: version,
+			},
+			Migrate:  migrate,
+			Rollback: rollback,
+		}
 
-	if err := SetVersionFormat(m); err != nil {
-		panic(err) // todo
-	}
+		if err := SetVersionFormat(m); err != nil {
+			return nil, err
+		}
 
-	return m
+		return m, nil
+	}
 }
 
 func (m *Migration) MigrateScripts() string {
@@ -126,6 +134,21 @@ func (m *Migration) RollbackScripts() string {
 }
 
 type Migrations []*Migration
+
+func NewMigrations(factories ...Factory) (Migrations, error) {
+	migrations := make(Migrations, len(factories))
+
+	for i := range factories {
+		m, err := factories[i]()
+		if err != nil {
+			return nil, err
+		}
+
+		migrations[i] = m
+	}
+
+	return migrations, nil
+}
 
 func (m Migrations) Keys() (result []string) {
 	for i := range m {

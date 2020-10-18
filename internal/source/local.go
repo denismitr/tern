@@ -2,10 +2,10 @@ package source
 
 import (
 	"context"
+	"github.com/denismitr/tern/internal/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,15 +25,19 @@ const (
 	defaultRollbackFileFullExtension = ".rollback.sql"
 
 	timestampBasedVersionFormat = `^(?P<version>\d{9,11})(_\w+)?$`
-	timestampBasedNameFormat = `^\d{9,12}_(?P<name>\w+[\w_-]+)?$`
+	timestampBasedNameFormat = `^\d{9,11}_(?P<name>\w+[\w_-]+)?$`
 	datetimeBasedVersionFormat = `^(?P<version>\d{14})(_\w+)?$`
 	datetimeBasedNameFormat = `^\d{14}_(?P<name>\w+[\w_-]+)?$`
+
+	anyBasedVersionFormat = `^(?P<version>\d{9,14})(_\w+)?$`
+	anyBasedNameFormat = `^\d{9,14}_(?P<name>\w+[\w_-]+)?$`
 )
 
 type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
 
 type LocalFileSource struct {
 	folder string
+	lg logger.Logger
 	vf migration.VersionFormat
 	versionRegexp *regexp.Regexp
 	nameRegexp *regexp.Regexp
@@ -74,7 +78,11 @@ func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migrati
 	return m, nil
 }
 
-func NewLocalFSSource(folder string, vf migration.VersionFormat) (*LocalFileSource, error) {
+func NewLocalFSSource(
+	folder string,
+	lg logger.Logger,
+	vf migration.VersionFormat,
+) (*LocalFileSource, error) {
 	versionRegexp, nameRegexp, err := LocalFSParsingRules(vf)
 	if err != nil {
 		return nil, err
@@ -84,7 +92,7 @@ func NewLocalFSSource(folder string, vf migration.VersionFormat) (*LocalFileSour
 		folder: folder,
 		versionRegexp: versionRegexp,
 		nameRegexp: nameRegexp,
-
+		lg: lg,
 	}, nil
 }
 
@@ -118,7 +126,8 @@ func LocalFSParsingRules(vf migration.VersionFormat) (*regexp.Regexp, *regexp.Re
 		versionRegexFormat = datetimeBasedVersionFormat
 		nameRegexFormat = datetimeBasedNameFormat
 	} else {
-		return nil, nil, errors.New("invalid or undefined version format")
+		versionRegexFormat = anyBasedVersionFormat
+		nameRegexFormat = anyBasedNameFormat
 	}
 
 	versionRegexp, err := regexp.Compile(versionRegexFormat)
@@ -141,6 +150,7 @@ func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Mig
 	}
 
 	migrationsCh := make(chan *migration.Migration)
+	errorsCh := make(chan error)
 	var wg sync.WaitGroup
 
 	for k := range keys {
@@ -149,7 +159,9 @@ func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Mig
 			defer wg.Done()
 			m, err := lfs.readOne(key)
 			if err != nil {
-				log.Printf("Migration error: %s", err.Error())
+				mErr := errors.Wrapf(err, "with key %s", key)
+				lfs.lg.Error(mErr)
+				errorsCh <- err
 			}
 
 			migrationsCh <- m
@@ -159,6 +171,7 @@ func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Mig
 	go func() {
 		wg.Wait()
 		close(migrationsCh)
+		close(errorsCh)
 	}()
 
 	var result migration.Migrations
@@ -169,10 +182,18 @@ func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Mig
 			return result, ctx.Err()
 		case m, ok := <-migrationsCh:
 			if ok {
+				if m == nil {
+					panic("how can a migration be null")
+				}
+
 				result = append(result, m)
 			} else {
 				sort.Sort(result)
 				return filterMigrations(result, f), nil
+			}
+		case err, ok := <-errorsCh:
+			if ok {
+				return nil, err
 			}
 		}
 	}
@@ -244,14 +265,24 @@ func (lfs *LocalFileSource) readOne(key string) (*migration.Migration, error) {
 	return lfs.createMigration(key, migrateContents, rollbackContents)
 }
 
-func (lfs *LocalFileSource) createMigration(key string, migrateContents, rollbackContents []byte) (*migration.Migration, error) {
+func (lfs *LocalFileSource) createMigration(
+	key string,
+	migrateContents,
+	rollbackContents []byte,
+) (*migration.Migration, error) {
 	name := lfs.extractNameFromKey(key)
 	version, err := lfs.extractVersionFromKey(key)
 	if err != nil {
 		return nil, err
 	}
 
-	return migration.NewMigrationFromFile(key, name, version, string(migrateContents), string(rollbackContents))
+	factory := migration.NewMigrationFromFile(key, name, version, string(migrateContents), string(rollbackContents))
+
+	m, err := factory()
+	if err != nil {
+		return nil, err
+	}
+	return m, err
 }
 
 func (lfs *LocalFileSource) extractVersionFromKey(key string) (migration.Version, error) {

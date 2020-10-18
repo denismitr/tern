@@ -199,13 +199,15 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		// given we have already migrated these 2 migrations
-		existingMigrations := migration.Migrations(
-			[]*migration.Migration{
-				migration.NewMigrationFromDB("1596897167", time.Now().Add(-2 * time.Hour), "Create foo table"),
-				migration.NewMigrationFromDB("1596897188", time.Now().Add(-2 * time.Hour), "Create bar table"),
-				migration.NewMigrationFromDB("1597897177", time.Now().Add(-2 * time.Hour), "Create baz table"),
-			},
+		existingMigrations, err := migration.NewMigrations(
+			migration.NewMigrationFromDB("1596897167", time.Now().Add(-2 * time.Hour), "Create foo table"),
+			migration.NewMigrationFromDB("1596897188", time.Now().Add(-2 * time.Hour), "Create bar table"),
+			migration.NewMigrationFromDB("1597897177", time.Now().Add(-2 * time.Hour), "Create baz table"),
 		)
+
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		if err := gateway.WriteVersions(ctx, existingMigrations); err != nil {
 			t.Fatal(err)

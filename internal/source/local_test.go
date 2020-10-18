@@ -3,6 +3,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"github.com/denismitr/tern/internal/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,7 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder, migration.TimestampFormat)
+	c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	key := "1596897167_create_foo_table"
@@ -39,7 +40,7 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder, migration.TimestampFormat)
+	c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	t.Run("all migrations can be read from local folder", func(t *testing.T) {
@@ -114,7 +115,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		{in: "M1596897167_create_foo_table", err: ErrInvalidTimestamp},
 		{in: "15968V97167_create_foo_table", err: ErrInvalidTimestamp},
 		{in: "_foo", err: ErrInvalidTimestamp},
-		{in: "1253656456566_foo", err: ErrInvalidTimestamp},
+		{in: "125A3656456566_foo", err: ErrInvalidTimestamp},
 	}
 
 	folder, err := filepath.Abs(defaultMysqlStubs)
@@ -122,7 +123,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder, migration.TimestampFormat)
+	c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	for _, tc := range valid {
@@ -167,7 +168,7 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder, migration.TimestampFormat)
+	c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	for _, tc := range tt {

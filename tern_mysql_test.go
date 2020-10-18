@@ -14,7 +14,8 @@ import (
 )
 
 const mysqlConnection = "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true"
-const mysqlMigrationsFolder = "./stubs/migrations/mysql/timestamp"
+const mysqlTimestampsMigrationsFolder = "./stubs/migrations/mysql/timestamp"
+const mysqlDatetimeMigrationsFolder = "./stubs/migrations/mysql/datetime"
 
 func Test_MigratorCanBeInstantiated(t *testing.T) {
 	db, err := sqlx.Open("mysql", mysqlConnection)
@@ -45,10 +46,10 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 	defer gateway.Close()
 
-	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
+	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder_with_timestamp_migrations", func(t *testing.T) {
 		m, closer, err := NewMigrator(
 			UseMySQL(db.DB),
-			UseLocalFolderSource(mysqlMigrationsFolder),
+			UseLocalFolderSource(mysqlTimestampsMigrationsFolder),
 		)
 
 		assert.NoError(t, err)
@@ -116,6 +117,77 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		}
 	})
 
+	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder_with_datetime_migrations", func(t *testing.T) {
+		m, closer, err := NewMigrator(
+			UseMySQL(db.DB),
+			UseLocalFolderSource(mysqlDatetimeMigrationsFolder),
+		)
+
+		assert.NoError(t, err)
+		defer func() {
+			assert.NoError(t, closer())
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		defer cancel()
+
+		// DO: clean up
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
+			t.Fatal(err)
+		}
+
+		keys, err := m.Migrate(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, []string{
+			"20191023224318_create_foo_table",
+			"20191023225128_create_bar_table",
+			"20191025053924_create_baz_table",
+		}, keys)
+
+		versions, err := gateway.ReadVersions(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Len(t, versions, 3)
+
+		assert.Equal(t, "20191023224318", versions[0].Value)
+		assert.Equal(t, "20191023225128", versions[1].Value)
+		assert.Equal(t, "20191025053924", versions[2].Value)
+
+		// expect 4 tables to exist now in the DB
+		// migrations table and 3 tables created by scripts
+		tables, err := gateway.ShowTables(ctx)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+
+		assert.Len(t, tables, 4)
+		assert.Equal(t, []string{"bar", "baz", "foo", "migrations"}, tables)
+
+		// DO: lets bring it down
+		if rolledBack, err := m.Rollback(ctx); err != nil {
+			assert.NoError(t, err)
+		} else {
+			assert.Len(t, rolledBack, 3)
+			assert.Equal(t, "20191025053924_create_baz_table", rolledBack[0].Key)
+			assert.Equal(t, "20191023225128_create_bar_table", rolledBack[1].Key)
+			assert.Equal(t, "20191023224318_create_foo_table", rolledBack[2].Key)
+		}
+
+		// expect migrations table to be clean
+		versionsAfterRollback, err := gateway.ReadVersions(ctx)
+		if err != nil {
+			assert.NoError(t, err)
+		}
+
+		assert.Len(t, versionsAfterRollback, 0)
+
+		if err := gateway.DropMigrationsTable(ctx); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	t.Run("it_will_skip_migrations_that_are_already_in_migrations_table", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
@@ -137,7 +209,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlTimestampsMigrationsFolder))
 		assert.NoError(t, err)
 		defer func() {
 			assert.NoError(t, closer())
@@ -200,19 +272,21 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		}
 
 		// given we have already migrated these 2 migrations
-		existingMigrations := migration.Migrations(
-			[]*migration.Migration{
-				migration.NewMigrationFromDB("1596897167", time.Now().Add(-2 * time.Hour), "Create foo table"),
-				migration.NewMigrationFromDB("1596897188", time.Now().Add(-2 * time.Hour), "Create bar table"),
-				migration.NewMigrationFromDB("1597897177", time.Now().Add(-2 * time.Hour), "Create baz table"),
-			},
+		existingMigrations, err := migration.NewMigrations(
+			migration.NewMigrationFromDB("1596897167", time.Now().Add(-2 * time.Hour), "Create foo table"),
+			migration.NewMigrationFromDB("1596897188", time.Now().Add(-2 * time.Hour), "Create bar table"),
+			migration.NewMigrationFromDB("1597897177", time.Now().Add(-2 * time.Hour), "Create baz table"),
 		)
+
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		if err := gateway.WriteVersions(ctx, existingMigrations); err != nil {
 			t.Fatal(err)
 		}
 
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlTimestampsMigrationsFolder))
 		assert.NoError(t, err)
 		defer func() {
 			assert.NoError(t, closer())
@@ -261,7 +335,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("run_single_migration_when_step_is_one", func(t *testing.T) {
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlTimestampsMigrationsFolder))
 		assert.NoError(t, err)
 
 		defer func() {
@@ -317,7 +391,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	t.Run("it_can_migrate_a_single_file", func(t *testing.T) {
 		m, closer, err := NewMigrator(
 			UseMySQL(db.DB),
-			UseLocalFolderSource(mysqlMigrationsFolder),
+			UseLocalFolderSource(mysqlTimestampsMigrationsFolder),
 		)
 
 		assert.NoError(t, err)
@@ -371,7 +445,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_refresh_all_migrations", func(t *testing.T) {
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlTimestampsMigrationsFolder))
 		assert.NoError(t, err)
 
 		defer func() {
@@ -436,7 +510,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
-		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlMigrationsFolder))
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlTimestampsMigrationsFolder))
 		assert.NoError(t, err)
 		defer func() {
 			assert.NoError(t, closer())

@@ -3,13 +3,13 @@ package database
 import (
 	"context"
 	"database/sql"
-	"github.com/denismitr/tern/retry"
+	"github.com/denismitr/tern/internal/retry"
 	"github.com/pkg/errors"
 	"time"
 )
 
 const (
-	DefaultConnectionAttemts     = 100
+	DefaultConnectionAttempts    = 100
 	DefaultConnectionTimeout     = 60 * time.Second
 	DefaultConnectionAttemptStep = 2 * time.Second
 )
@@ -22,7 +22,7 @@ type ConnectOptions struct {
 
 func NewDefaultConnectOptions() *ConnectOptions {
 	return &ConnectOptions{
-		MaxAttempts: DefaultConnectionAttemts,
+		MaxAttempts: DefaultConnectionAttempts,
 		MaxTimeout:  DefaultConnectionTimeout,
 		Step:        DefaultConnectionAttemptStep,
 	}
@@ -51,7 +51,7 @@ func (c RetryingConnector) connect(ctx context.Context) (*sql.Conn, error) {
 	if err := retry.Incremental(ctx, 2*time.Second, c.options.MaxAttempts, func(attempt int) (err error) {
 		conn, err = c.db.Conn(ctx)
 		if err != nil {
-			return errors.Wrap(err, "could not establish DB connection")
+			return retry.Error(errors.Wrap(err, "could not establish DB connection"), attempt)
 		}
 
 		return nil

@@ -4,200 +4,159 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/denismitr/tern"
 	"github.com/denismitr/tern/database"
-	"github.com/jmoiron/sqlx"
+	"github.com/denismitr/tern/internal/cli"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/pkg/errors"
-	"log"
-	"os"
-	"strings"
 	"time"
 )
 
-type migratorFactory func(cfg config) (*tern.Migrator, tern.CloserFunc, error)
-
-type config struct {
-	databaseUrl      string
-	migrationsFolder string
-}
-
-type migratorFactoryMap map[string]migratorFactory
-
-func migrate(cfg config) (err error) {
-	m, closer, createErr := createMigrator(cfg)
-	if createErr != nil {
-		err = createErr
-		return
-	}
-
-	defer func() {
-		if closeErr := closer(); closeErr != nil {
-			err = closeErr
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	if _, migrateErr := m.Migrate(ctx); migrateErr != nil {
-		err = migrateErr
-		return
-	}
-
-	return
-}
-
-func rollback(cfg config) (err error) {
-	m, closer, createErr := createMigrator(cfg)
-	if createErr != nil {
-		err = createErr
-		return
-	}
-
-	defer func() {
-		if closeErr := closer(); closeErr != nil {
-			err = closeErr
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	if _, rollbackErr := m.Rollback(ctx); rollbackErr != nil {
-		err = rollbackErr
-		return
-	}
-
-	return nil
-}
-
-func refresh(cfg config) (err error) {
-	m, closer, createErr := createMigrator(cfg)
-	if createErr != nil {
-		err = createErr
-		return
-	}
-
-	defer func() {
-		if closeErr := closer(); closeErr != nil {
-			err = closeErr
-		}
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	if _, _, refreshErr := m.Refresh(ctx); refreshErr != nil {
-		err = refreshErr
-		return
-	}
-
-	return nil
-}
-
-func createMySQLMigrator(cfg config) (*tern.Migrator, tern.CloserFunc, error) {
-	db, err := sqlx.Open("mysql", strings.TrimPrefix(cfg.databaseUrl, "mysql://"))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var opts []tern.OptionFunc
-	opts = append(
-		opts,
-		tern.UseMySQL(db.DB),
-		tern.UseLocalFolderSource(cfg.migrationsFolder),
-		tern.UseColorLogger(log.New(os.Stdout, "", 0), true, true),
-	)
-
-	return tern.NewMigrator(opts...)
-}
-
-func createMigrator(cfg config) (*tern.Migrator, tern.CloserFunc, error) {
-	factoryMap := make(map[string]migratorFactory)
-	factoryMap["mysql"] = createMySQLMigrator
-
-	var driver string
-	if strings.HasPrefix(cfg.databaseUrl, "mysql") {
-		driver = "mysql"
-	} else if strings.HasPrefix(cfg.databaseUrl, "sqlite") {
-		driver = "sqlite"
-	} else {
-		return nil, nil, errors.New("unknown database driver")
-	}
-
-	return createMigratorFrom(driver, factoryMap, cfg)
-}
-
-func createMigratorFrom(driver string, factoryMap migratorFactoryMap, cfg config) (*tern.Migrator, tern.CloserFunc, error) {
-	factory, ok := factoryMap[driver]
-	if !ok {
-		return nil, nil, errors.Errorf("could not find factory for driver [%s]", driver)
-	}
-
-	return factory(cfg)
-}
+const defaultTimeout = 360
 
 func main() {
-	migrateCmd := flag.Bool("migrate", false, "run the migrations")
-	rollbackCmd := flag.Bool("rollback", false, "rollback the migrations")
-	refreshCmd := flag.Bool("refresh", false, "refresh the migrations (rollback and then migrate)")
+	initFlag := flag.Bool("init", false, "initialize Tern config file")
+	configFile := flag.String("cfg", "./tern.yaml", "tern configuration file")
 
-	databaseUrl := flag.String("db", "", "Database URL")
-	folder := flag.String("folder", "", "local source folder, short for -source=file://path")
+	createCmd := flag.String("create", "", "create new migration")
+	noRollback := flag.Bool("no-rollback", false, "Create a new migration without a rollback")
+
+	migrateFlag := flag.Bool("migrate", false, "run the migrations")
+	rollbackFlag := flag.Bool("rollback", false, "rollback the migrations")
+	refreshFlag := flag.Bool("refresh", false, "refresh the migrations (rollback and then migrate again)")
+
+	timeout := flag.Int("timeout", defaultTimeout, "max timeout")
+	steps := flag.Int("steps", 0, "steps to execute")
 
 	flag.Parse()
 
-	if *databaseUrl == "" {
-		fmt.Println(aurora.Red("tern-cli: "), "Database not specified")
-		os.Exit(1)
+	if *configFile == "" {
+		exitWithError(errors.New("Config file not specified"))
 	}
 
-	if *folder == "" {
-		fmt.Println(aurora.Red("tern-cli: "), "Migrations folder not specified")
-		os.Exit(1)
+	if *initFlag {
+		createConfigFile(*configFile)
+		return
 	}
 
-	cfg := config{
-		databaseUrl:      *databaseUrl,
-		migrationsFolder: *folder,
+	app, closer, err := cli.NewFromYaml(*configFile)
+	if err != nil {
+		exitWithError(err)
 	}
 
-	if *migrateCmd {
-		if err := migrate(cfg); err != nil {
-			if errors.Is(err, database.ErrNothingToMigrate) {
-				fmt.Println(aurora.Green("tern-cli: "), "Nothing to migrate")
-				os.Exit(0)
-			}
+	defer func() {
+		if err := closer(); err != nil {
+			exitWithError(err)
+		}
+	}()
 
-			fmt.Println(aurora.Red("tern-cli: "), err.Error())
-			os.Exit(1)
+	if *createCmd != "" {
+		createMigration(app, createCmd, noRollback)
+		return
+	}
+
+	if *migrateFlag {
+		migrate(app, *steps, *timeout)
+		return
+	}
+
+	if *rollbackFlag {
+		rollback(app, *steps, *timeout)
+		return
+	}
+
+	if *refreshFlag {
+		refresh(app, *steps, *timeout)
+		return
+	}
+
+	exitWithError(errors.New("You need to choose on of commands: init-cfg, create, migrate, rollback, refresh"))
+}
+
+func refresh(app *cli.App, steps, timeout int) {
+	if timeout <= 0 {
+		exitWithError(errors.New("refresh timeout must be a positive integer or simply be omitted"))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	if err := app.Rollback(ctx, cli.ActionConfig{Steps: steps}); err != nil {
+		exitWithError(err)
+	}
+
+	green("Migration refresh completed. All done...")
+}
+
+func rollback(app *cli.App, steps, timeout int) {
+	if timeout <= 0 {
+		exitWithError(errors.New("rollback timeout must be a positive integer or simply be omitted"))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	if err := app.Rollback(ctx, cli.ActionConfig{Steps: steps}); err != nil {
+		exitWithError(err)
+	}
+
+	green("Migration rollback completed. All done...")
+}
+
+func migrate(app *cli.App, steps, timeout int) {
+	if timeout <= 0 {
+		exitWithError(errors.New("migrate timeout must be a positive integer or simply be omitted"))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	if err := app.Migrate(ctx, cli.ActionConfig{Steps: steps}); err != nil {
+		if errors.Is(err, database.ErrNothingToMigrate) {
+			green("Nothing to migrate")
+			return
 		}
 
-		fmt.Println(aurora.Green("tern-cli: "), "all done")
-		os.Exit(0)
+		exitWithError(err)
 	}
 
-	if *rollbackCmd {
-		if err := rollback(cfg); err != nil {
-			fmt.Println(aurora.Red("tern-cli: "), err.Error())
-			os.Exit(1)
-		}
+	green("Migration complete. All done...")
+}
 
-		fmt.Println(aurora.Green("tern-cli: "), "all done")
-		os.Exit(0)
+func createMigration(app *cli.App, createCmd *string, noRollback *bool) {
+	m, err := app.CreateMigration(*createCmd, !*noRollback)
+	if err != nil {
+		exitWithError(err)
 	}
 
-	if *refreshCmd {
-		if err := refresh(cfg); err != nil {
-			fmt.Println(aurora.Red("tern-cli: "), err.Error())
-			os.Exit(1)
-		}
+	green("Migration %s created ", m.Key)
+}
 
-		fmt.Println(aurora.Green("tern-cli: "), "all done")
-		os.Exit(0)
+func createConfigFile(filename string) {
+	if cli.FileExists(filename) {
+		green("config file %s already exists", filename)
+		return
 	}
 
-	fmt.Println(aurora.Red("tern-cli: "), "Unknown command")
-	os.Exit(1)
+	green("creating config file: %s", filename)
+
+	if err := cli.InitCfg(filename); err != nil {
+		exitWithError(err)
+	}
+
+	green("config file %s created. Done", filename)
+}
+
+func green(s string, f ...interface{}) {
+	fmt.Printf(aurora.Green("tern-cli: ").String() + s, f...)
+	fmt.Println()
+}
+
+func red(s string, f ...interface{}) {
+	fmt.Printf(aurora.Red("tern-cli: ").String() + s, f...)
+	fmt.Println()
+}
+
+func exitWithError(err error) {
+	red(err.Error())
+	panic("tern terminated with error")
 }

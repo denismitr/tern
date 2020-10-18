@@ -3,9 +3,9 @@ package tern
 import (
 	"context"
 	"github.com/denismitr/tern/database"
-	"github.com/denismitr/tern/logger"
+	"github.com/denismitr/tern/internal/logger"
+	"github.com/denismitr/tern/internal/source"
 	"github.com/denismitr/tern/migration"
-	"github.com/denismitr/tern/source"
 	"github.com/pkg/errors"
 )
 
@@ -16,7 +16,7 @@ type CloserFunc func() error
 type Migrator struct {
 	lg             logger.Logger
 	gateway        database.Gateway
-	converter      source.Selector
+	selector       source.Selector
 	connectOptions *database.ConnectOptions
 }
 
@@ -25,6 +25,7 @@ type Migrator struct {
 // are required a number of defaults will be applied
 func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 	m := new(Migrator)
+	m.lg = &logger.NullLogger{}
 
 	for _, oFunc := range opts {
 		if err := oFunc(m); err != nil {
@@ -36,9 +37,14 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 		return nil, nil, ErrGatewayNotInitialized
 	}
 
-	// Default converter implementation
-	if m.converter == nil {
-		localFsConverter, err := source.NewLocalFSSource(source.DefaultMigrationsFolder)
+	// Default selector implementation
+	if m.selector == nil {
+		localFsConverter, err := source.NewLocalFSSource(
+			source.DefaultMigrationsFolder,
+			m.lg,
+			migration.TimestampFormat,
+		)
+
 		if gatewayErr := m.gateway.Close(); gatewayErr != nil {
 			return nil, nil, errors.Wrap(err, gatewayErr.Error())
 		}
@@ -47,20 +53,12 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 			return nil, nil, err
 		}
 
-		m.converter = localFsConverter
-	}
-
-	if m.lg == nil {
-		m.lg = &logger.NullLogger{}
+		m.selector = localFsConverter
 	}
 
 	m.gateway.SetLogger(m.lg)
 
-	closer := func() error {
-		return m.close()
-	}
-
-	return m, closer, nil
+	return m, m.close, nil
 }
 
 // Migrate the migrations using action configurator callbacks to customize
@@ -71,7 +69,7 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 		f(act)
 	}
 
-	migrations, err := m.converter.Select(ctx, source.Filter{Keys: act.keys})
+	migrations, err := m.selector.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, err
@@ -80,7 +78,7 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 	p := database.Plan{Steps: act.steps}
 	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
-		if ! errors.Is(err, database.ErrNothingToMigrate) {
+		if !errors.Is(err, database.ErrNothingToMigrate) {
 			m.lg.Error(err)
 		}
 
@@ -98,7 +96,7 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 		f(act)
 	}
 
-	migrations, err := m.converter.Select(ctx, source.Filter{Keys: act.keys})
+	migrations, err := m.selector.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, errors.Wrap(err, "could not rollback migrations")
@@ -134,7 +132,7 @@ func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migr
 		f(act)
 	}
 
-	migrations, err := m.converter.Select(ctx, source.Filter{})
+	migrations, err := m.selector.Select(ctx, source.Filter{})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, nil, err
@@ -147,4 +145,13 @@ func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migr
 	}
 
 	return rolledBack, migrated, nil
+}
+
+// Source - returns migrator selector if it implements the full source.Source interface
+func (m *Migrator) Source() source.Source {
+	if s, ok := m.selector.(source.Source); ok {
+		return s
+	}
+
+	return nil
 }

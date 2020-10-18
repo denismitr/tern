@@ -3,6 +3,8 @@ package source
 import (
 	"context"
 	"fmt"
+	"github.com/denismitr/tern/internal/logger"
+	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"path/filepath"
@@ -18,7 +20,7 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder)
+	c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	key := "1596897167_create_foo_table"
@@ -26,7 +28,7 @@ func Test_SingleMigrationCanBeReadFromLocalFile(t *testing.T) {
 	m, err := c.readOne(key)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "1596897167", m.Version.Timestamp)
+	assert.Equal(t, "1596897167", m.Version.Value)
 	assert.Equal(t, "Create foo table", m.Name)
 	assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"}, m.Migrate)
 	assert.Equal(t, []string{"DROP TABLE IF EXISTS foo;"}, m.Rollback)
@@ -38,7 +40,7 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder)
+	c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	t.Run("all migrations can be read from local folder", func(t *testing.T) {
@@ -51,19 +53,19 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		assert.Len(t, migrations, 3)
 
 		assert.Equal(t, "Create foo table", migrations[0].Name)
-		assert.Equal(t, "1596897167", migrations[0].Version.Timestamp)
+		assert.Equal(t, "1596897167", migrations[0].Version.Value)
 		assert.Equal(t, "1596897167_create_foo_table", migrations[0].Key)
 		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[0].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS foo;"}, migrations[0].Rollback)
 
 		assert.Equal(t, "Create bar table", migrations[1].Name)
-		assert.Equal(t, "1596897188", migrations[1].Version.Timestamp)
+		assert.Equal(t, "1596897188", migrations[1].Version.Value)
 		assert.Equal(t, "1596897188_create_bar_table", migrations[1].Key)
 		assert.Equal(t, []string{"CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[1].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS bar;"}, migrations[1].Rollback)
 
 		assert.Equal(t, "Create baz table", migrations[2].Name)
-		assert.Equal(t, "1597897177", migrations[2].Version.Timestamp)
+		assert.Equal(t, "1597897177", migrations[2].Version.Value)
 		assert.Equal(t, "1597897177_create_baz_table", migrations[2].Key)
 		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"}, migrations[2].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS baz;"}, migrations[2].Rollback)
@@ -79,13 +81,13 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		assert.Len(t, migrations, 2)
 
 		assert.Equal(t, "Create bar table", migrations[0].Name)
-		assert.Equal(t, "1596897188", migrations[0].Version.Timestamp)
+		assert.Equal(t, "1596897188", migrations[0].Version.Value)
 		assert.Equal(t, "1596897188_create_bar_table", migrations[0].Key)
 		assert.Equal(t, []string{"CREATE TABLE bar (uid binary(16) PRIMARY KEY) ENGINE=INNODB;"}, migrations[0].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS bar;"}, migrations[0].Rollback)
 
 		assert.Equal(t, "Create baz table", migrations[1].Name)
-		assert.Equal(t, "1597897177", migrations[1].Version.Timestamp)
+		assert.Equal(t, "1597897177", migrations[1].Version.Value)
 		assert.Equal(t, "1597897177_create_baz_table", migrations[1].Key)
 		assert.Equal(t, []string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL) ENGINE=INNODB;"}, migrations[1].Migrate)
 		assert.Equal(t, []string{"DROP TABLE IF EXISTS baz;"}, migrations[1].Rollback)
@@ -102,7 +104,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		{in: "1596897167_create_foo_table", out: "1596897167"},
 		{in: "1496897167_create_foo_table", out: "1496897167"},
 		{in: "1496897167", out: "1496897167"},
-		{in: "31536000", out: "31536000"},
+		{in: "315360001", out: "315360001"},
 		{in: "14968971672", out: "14968971672"},
 	}
 
@@ -110,10 +112,10 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		in string
 		err error
 	}{
-		{in: "M1596897167_create_foo_table", err:  ErrInvalidTimestamp},
-		{in: "15968V97167_create_foo_table", err:  ErrInvalidTimestamp},
-		{in: "_foo", err:  ErrInvalidTimestamp},
-		{in: "1253656456566_foo", err:  ErrInvalidTimestamp},
+		{in: "M1596897167_create_foo_table", err: ErrInvalidTimestamp},
+		{in: "15968V97167_create_foo_table", err: ErrInvalidTimestamp},
+		{in: "_foo", err: ErrInvalidTimestamp},
+		{in: "125A3656456566_foo", err: ErrInvalidTimestamp},
 	}
 
 	folder, err := filepath.Abs(defaultMysqlStubs)
@@ -121,7 +123,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder)
+	c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	for _, tc := range valid {
@@ -130,7 +132,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 		t.Run(fmt.Sprintf("valid-timestanps-%s", tc.in), func(t *testing.T) {
 			out, err := c.extractVersionFromKey(tc.in)
 			assert.NoError(t, err)
-			assert.Equal(t, tc.out, out.Timestamp)
+			assert.Equal(t, tc.out, out.Value)
 		})
 	}
 
@@ -141,7 +143,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 			out, err := c.extractVersionFromKey(tc.in)
 			assert.Error(t, err)
 			assert.True(t, errors.Is(tc.err, err))
-			assert.Equal(t, "", out.Timestamp)
+			assert.Equal(t, "", out.Value)
 		})
 	}
 }
@@ -157,7 +159,7 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 		{in: "1496897167_create_the_bar_2_table", out: "Create the bar 2 table"},
 		{in: "1496897167_create_the_bar-2_table", out: "Create the bar-2 table"},
 		{in: "1496897167_delete_some_field", out: "Delete some field"},
-		{in: "31536000_initial", out: "Initial"},
+		{in: "3153600022_initial", out: "Initial"},
 		{in: "14968971672", out: ""},
 	}
 
@@ -166,7 +168,7 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := NewLocalFSSource(folder)
+	c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
 	assert.NoError(t, err)
 
 	for _, tc := range tt {

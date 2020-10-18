@@ -3,7 +3,7 @@ package database
 import  (
 	"context"
 	"database/sql"
-	"github.com/denismitr/tern/logger"
+	"github.com/denismitr/tern/internal/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
 	"io"
@@ -222,24 +222,24 @@ func (db *dbh) migrateAll(ctx context.Context, migrations migration.Migrations, 
 	return migrated, nil
 }
 
-func (db *dbh) migrateOne(ctx context.Context, tx ctxExecutor, migration *migration.Migration, insertQuery string) error {
-	if migration.Version.Timestamp == "" {
+func (db *dbh) migrateOne(ctx context.Context, tx ctxExecutor, m *migration.Migration, insertQuery string) error {
+	if m.Version.Value == "" {
 		return ErrMigrationVersionNotSpecified
 	}
 
-	db.lg.SQL(migration.MigrateScripts())
+	db.lg.SQL(m.MigrateScripts())
 
-	if _, err := tx.ExecContext(ctx, migration.MigrateScripts()); err != nil {
-		return errors.Wrapf(err, "could not run migration [%s]", migration.Key)
+	if _, err := tx.ExecContext(ctx, m.MigrateScripts()); err != nil {
+		return errors.Wrapf(err, "could not run migration [%s]", m.Key)
 	}
 
-	db.lg.SQL(insertQuery, migration.Version.Timestamp, migration.Name)
+	db.lg.SQL(insertQuery, m.Version.Value, m.Name)
 
-	if _, err := tx.ExecContext(ctx, insertQuery, migration.Version.Timestamp, migration.Name); err != nil {
+	if _, err := tx.ExecContext(ctx, insertQuery, m.Version.Value, m.Name); err != nil {
 		return errors.Wrapf(
 			err,
 			"could not insert migration version [%s]",
-			migration.Version.Timestamp,
+			m.Version.Value,
 		)
 	}
 
@@ -286,26 +286,26 @@ func (db *dbh) rollbackAll(ctx context.Context, migrations migration.Migrations,
 	return executed, nil
 }
 
-func (db *dbh) rollbackOne(ctx context.Context, ex ctxExecutor, migration *migration.Migration, removeVersionQuery string) error {
-	if migration.Version.Timestamp == "" {
+func (db *dbh) rollbackOne(ctx context.Context, ex ctxExecutor, m *migration.Migration, removeVersionQuery string) error {
+	if m.Version.Value == "" {
 		return ErrMigrationVersionNotSpecified
 	}
 
-	if migration.RollbackScripts() != "" {
-		db.lg.SQL(migration.RollbackScripts())
+	if m.RollbackScripts() != "" {
+		db.lg.SQL(m.RollbackScripts())
 
-		if _, err := ex.ExecContext(ctx, migration.RollbackScripts()); err != nil {
-			return errors.Wrapf(err, "could not rollback migration [%s]", migration.Key)
+		if _, err := ex.ExecContext(ctx, m.RollbackScripts()); err != nil {
+			return errors.Wrapf(err, "could not rollback migration [%s]", m.Key)
 		}
 	}
 
-	db.lg.SQL(removeVersionQuery, migration.Version.Timestamp)
+	db.lg.SQL(removeVersionQuery, m.Version.Value)
 
-	if _, err := ex.ExecContext(ctx, removeVersionQuery, migration.Version.Timestamp); err != nil {
+	if _, err := ex.ExecContext(ctx, removeVersionQuery, m.Version.Value); err != nil {
 		return errors.Wrapf(
 			err,
 			"could not remove migration version [%s]",
-			migration.Version.Timestamp,
+			m.Version.Value,
 		)
 	}
 
@@ -383,13 +383,23 @@ func (db *dbh) showTables(ctx context.Context) ([]string, error) {
 		return nil, errors.Wrap(err, "could not list all tables")
 	}
 
+	defer rows.Close()
+
 	var result []string
 	for rows.Next() {
-		var table string
-		if err := rows.Scan(&table); err != nil {
-			_ = rows.Close()
-			return result, err
+		if errRows := rows.Err(); errRows != nil {
+			if errRows != sql.ErrNoRows {
+				return nil, errors.Wrap(errRows, "migration table iteration error")
+			} else {
+				break
+			}
 		}
+
+		var table string
+		if errScan := rows.Scan(&table); errScan != nil {
+			return result, errScan
+		}
+
 		result = append(result, table)
 	}
 
@@ -410,7 +420,7 @@ func (db *dbh) writeVersions(ctx context.Context, migrations migration.Migration
 
 	for i := range migrations {
 		name := migrations[i].Name
-		timestamp := migrations[i].Version.Timestamp
+		timestamp := migrations[i].Version.Value
 		if _, err := db.conn.ExecContext(ctx, query, timestamp, name); err != nil {
 			_ = tx.Rollback() // fixme
 			return errors.Wrapf(err, "could not insert migration with version [%s] and name [%s] to [%s] table", timestamp, name, db.migrationsTable)
@@ -418,7 +428,9 @@ func (db *dbh) writeVersions(ctx context.Context, migrations migration.Migration
 	}
 
 	if err := tx.Commit(); err != nil {
-		tx.Rollback() // fixme
+		if errRb := tx.Rollback(); errRb != nil {
+			return errors.Wrap(errRb, "could not rollback write migration versions transaction")
+		}
 	}
 
 	return nil

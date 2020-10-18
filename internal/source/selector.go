@@ -19,6 +19,14 @@ type Selector interface {
 	Select(ctx context.Context, f Filter) (migration.Migrations, error)
 }
 
+type Source interface {
+	Selector
+
+	IsValid() bool
+	AlreadyExists(dt, name string) bool
+	Create(dt, name string, withRollback bool) (*migration.Migration, error)
+}
+
 func filterMigrations(m migration.Migrations, f Filter) migration.Migrations {
 	return m
 }

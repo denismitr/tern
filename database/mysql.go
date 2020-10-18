@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/denismitr/tern/logger"
+	"github.com/denismitr/tern/internal/logger"
 	"github.com/denismitr/tern/migration"
 	"github.com/pkg/errors"
 	"time"
@@ -13,9 +13,9 @@ import (
 const (
 	mysqlCreateMigrationsSchema = `
 		CREATE TABLE IF NOT EXISTS %s (
-			version VARCHAR(13) PRIMARY KEY,
-			name VARCHAR(255),
-			created_at TIMESTAMP default CURRENT_TIMESTAMP
+			version VARCHAR(14) PRIMARY KEY,
+			name VARCHAR(120),
+			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
 		) ENGINE=INNODB;	
 	`
 	mysqlShowTables           = "SHOW TABLES;"

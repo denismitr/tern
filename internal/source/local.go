@@ -32,16 +32,16 @@ const (
 
 type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
 
-type LocalFSConverter struct {
+type LocalFileSource struct {
 	folder string
 	vf migration.VersionFormat
 	versionRegexp *regexp.Regexp
 	nameRegexp *regexp.Regexp
 }
 
-func (c *LocalFSConverter) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
+func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
 	key := migration.CreateKeyFromTimestampAndName(dt, name)
-	migrateFilename := filepath.Join(c.folder, key +defaultMigrateFileFullExtension)
+	migrateFilename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
 	mf, err := os.Create(migrateFilename)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not create file [%s]", migrateFilename)
@@ -60,7 +60,7 @@ func (c *LocalFSConverter) Create(dt, name string, withRollback bool) (*migratio
 	}
 
 	if withRollback {
-		rollbackFilename := filepath.Join(c.folder, key +defaultRollbackFileFullExtension)
+		rollbackFilename := filepath.Join(lfs.folder, key +defaultRollbackFileFullExtension)
 		rf, err := os.Create(rollbackFilename)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not create file [%s]", rollbackFilename)
@@ -74,13 +74,13 @@ func (c *LocalFSConverter) Create(dt, name string, withRollback bool) (*migratio
 	return m, nil
 }
 
-func NewLocalFSSource(folder string, vf migration.VersionFormat) (*LocalFSConverter, error) {
+func NewLocalFSSource(folder string, vf migration.VersionFormat) (*LocalFileSource, error) {
 	versionRegexp, nameRegexp, err := LocalFSParsingRules(vf)
 	if err != nil {
 		return nil, err
 	}
 
-	return &LocalFSConverter{
+	return &LocalFileSource{
 		folder: folder,
 		versionRegexp: versionRegexp,
 		nameRegexp: nameRegexp,
@@ -88,8 +88,8 @@ func NewLocalFSSource(folder string, vf migration.VersionFormat) (*LocalFSConver
 	}, nil
 }
 
-func (c *LocalFSConverter) IsValid() bool {
-	info, err := os.Stat(c.folder)
+func (lfs *LocalFileSource) IsValid() bool {
+	info, err := os.Stat(lfs.folder)
 	if os.IsNotExist(err) {
 		return false
 	}
@@ -97,9 +97,9 @@ func (c *LocalFSConverter) IsValid() bool {
 	return info.IsDir()
 }
 
-func (c *LocalFSConverter) AlreadyExists(dt, name string) bool {
+func (lfs *LocalFileSource) AlreadyExists(dt, name string) bool {
 	key := migration.CreateKeyFromTimestampAndName(dt, name)
-	filename := filepath.Join(c.folder, key +defaultMigrateFileFullExtension)
+	filename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return false
@@ -134,8 +134,8 @@ func LocalFSParsingRules(vf migration.VersionFormat) (*regexp.Regexp, *regexp.Re
 	return versionRegexp, nameRegexp, nil
 }
 
-func (c *LocalFSConverter) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
-	keys, err := c.getAllKeysFromFolder(f.Keys)
+func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
+	keys, err := lfs.getAllKeysFromFolder(f.Keys)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (c *LocalFSConverter) Select(ctx context.Context, f Filter) (migration.Migr
 		wg.Add(1)
 		go func(key string) {
 			defer wg.Done()
-			m, err := c.readOne(key)
+			m, err := lfs.readOne(key)
 			if err != nil {
 				log.Printf("Migration error: %s", err.Error())
 			}
@@ -178,10 +178,10 @@ func (c *LocalFSConverter) Select(ctx context.Context, f Filter) (migration.Migr
 	}
 }
 
-func (c *LocalFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]int, error) {
-	files, err := ioutil.ReadDir(c.folder)
+func (lfs *LocalFileSource) getAllKeysFromFolder(onlyKeys []string) (map[string]int, error) {
+	files, err := ioutil.ReadDir(lfs.folder)
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not read keys from folder %s", c.folder)
+		return nil, errors.Wrapf(err, "could not read keys from folder %s", lfs.folder)
 	}
 
 	keys := make(map[string]int)
@@ -213,9 +213,9 @@ func (c *LocalFSConverter) getAllKeysFromFolder(onlyKeys []string) (map[string]i
 	return keys, nil
 }
 
-func (c *LocalFSConverter) readOne(key string) (*migration.Migration, error) {
-	up := filepath.Join(c.folder, key+defaultMigrateFileFullExtension)
-	down := filepath.Join(c.folder, key+defaultRollbackFileFullExtension)
+func (lfs *LocalFileSource) readOne(key string) (*migration.Migration, error) {
+	up := filepath.Join(lfs.folder, key+defaultMigrateFileFullExtension)
+	down := filepath.Join(lfs.folder, key+defaultRollbackFileFullExtension)
 
 	fUp, err := os.Open(up)
 	if err != nil {
@@ -241,12 +241,12 @@ func (c *LocalFSConverter) readOne(key string) (*migration.Migration, error) {
 		return nil, err
 	}
 
-	return c.createMigration(key, migrateContents, rollbackContents)
+	return lfs.createMigration(key, migrateContents, rollbackContents)
 }
 
-func (c *LocalFSConverter) createMigration(key string, migrateContents, rollbackContents []byte) (*migration.Migration, error) {
-	name := c.extractNameFromKey(key)
-	version, err := c.extractVersionFromKey(key)
+func (lfs *LocalFileSource) createMigration(key string, migrateContents, rollbackContents []byte) (*migration.Migration, error) {
+	name := lfs.extractNameFromKey(key)
+	version, err := lfs.extractVersionFromKey(key)
 	if err != nil {
 		return nil, err
 	}
@@ -254,9 +254,9 @@ func (c *LocalFSConverter) createMigration(key string, migrateContents, rollback
 	return migration.NewMigrationFromFile(key, name, version, string(migrateContents), string(rollbackContents))
 }
 
-func (c *LocalFSConverter) extractVersionFromKey(key string) (migration.Version, error) {
+func (lfs *LocalFileSource) extractVersionFromKey(key string) (migration.Version, error) {
 	var result migration.Version
-	matches := c.versionRegexp.FindStringSubmatch(key)
+	matches := lfs.versionRegexp.FindStringSubmatch(key)
 	if len(matches) < 2 {
 		return result, ErrInvalidTimestamp
 	}
@@ -266,8 +266,8 @@ func (c *LocalFSConverter) extractVersionFromKey(key string) (migration.Version,
 	return result, nil
 }
 
-func (c *LocalFSConverter) extractNameFromKey(key string) string {
-	matches := c.nameRegexp.FindStringSubmatch(key)
+func (lfs *LocalFileSource) extractNameFromKey(key string) string {
+	matches := lfs.nameRegexp.FindStringSubmatch(key)
 	if len(matches) < 2 {
 		return ""
 	}

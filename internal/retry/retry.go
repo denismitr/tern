@@ -28,7 +28,7 @@ type Attempts interface {
 	Current() int
 }
 
-func Start(ctx context.Context, a Attempts, cb Callable) error {
+func start(ctx context.Context, a Attempts, cb Callable) error {
 	for {
 		err := cb(a.Current())
 		if err == nil {
@@ -55,7 +55,7 @@ func Start(ctx context.Context, a Attempts, cb Callable) error {
 }
 
 func Incremental(ctx context.Context, step time.Duration, maxRetries int, cb Callable) error {
-	return Start(ctx, IncrementalAttempts(step, maxRetries), cb)
+	return start(ctx, IncrementalAttempts(step, maxRetries), cb)
 }
 
 type incrementalAttempts struct {

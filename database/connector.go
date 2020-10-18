@@ -51,7 +51,7 @@ func (c RetryingConnector) connect(ctx context.Context) (*sql.Conn, error) {
 	if err := retry.Incremental(ctx, 2*time.Second, c.options.MaxAttempts, func(attempt int) (err error) {
 		conn, err = c.db.Conn(ctx)
 		if err != nil {
-			return errors.Wrap(err, "could not establish DB connection")
+			return retry.Error(errors.Wrap(err, "could not establish DB connection"), attempt)
 		}
 
 		return nil

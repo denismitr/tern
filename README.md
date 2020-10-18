@@ -112,7 +112,7 @@ Apart from `Migrate` command, there are `Rollback` and `Refresh` commands.
 
 #### In memory source
 ```go
-source := tern.UseInMemorySource(
+    source := tern.UseInMemorySource(
 		migration.New(
 			"20201011221745",
 			"Create foo table",
@@ -135,14 +135,4 @@ source := tern.UseInMemorySource(
 		),
 		source,
 	)
-
-m, closer, err := tern.NewMigrator(
-		tern.UseMySQL(
-			db,
-			tern.WithMySQLMigrationTable("remer_migrations"),
-			tern.WithMySQLNoLock(),
-		),
-		source,
-	)
-
 ```

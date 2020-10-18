@@ -14,7 +14,7 @@ import (
 )
 
 const mysqlConnection = "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true"
-const mysqlMigrationsFolder = "./stubs/migrations/mysql"
+const mysqlMigrationsFolder = "./stubs/migrations/mysql/timestamp"
 
 func Test_MigratorCanBeInstantiated(t *testing.T) {
 	db, err := sqlx.Open("mysql", mysqlConnection)

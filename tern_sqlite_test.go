@@ -13,7 +13,7 @@ import (
 )
 
 const sqliteConnection = "./test.sqlite"
-const sqliteMigrationsFolder = "./stubs/migrations/sqlite"
+const sqliteMigrationsFolder = "./stubs/migrations/sqlite/timestamp"
 
 func Test_MigratorCanBeInstantiated_WithSqliteDriver(t *testing.T) {
 	db, err := sqlx.Open("sqlite3", sqliteConnection)

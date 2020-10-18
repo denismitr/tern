@@ -103,7 +103,11 @@ func (g *SqliteGateway) Rollback(ctx context.Context, migrations migration.Migra
 	return g.dbh.rollbackAll(ctx, migrations, p)
 }
 
-func (g *SqliteGateway) Refresh(ctx context.Context, migrations migration.Migrations, plan Plan) (migration.Migrations, migration.Migrations, error) {
+func (g *SqliteGateway) Refresh(
+	ctx context.Context,
+	migrations migration.Migrations,
+	plan Plan,
+) (migration.Migrations, migration.Migrations, error) {
 	return g.dbh.refresh(ctx, migrations, plan)
 }
 

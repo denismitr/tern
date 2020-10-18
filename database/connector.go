@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	DefaultConnectionAttemts     = 100
+	DefaultConnectionAttempts    = 100
 	DefaultConnectionTimeout     = 60 * time.Second
 	DefaultConnectionAttemptStep = 2 * time.Second
 )
@@ -22,7 +22,7 @@ type ConnectOptions struct {
 
 func NewDefaultConnectOptions() *ConnectOptions {
 	return &ConnectOptions{
-		MaxAttempts: DefaultConnectionAttemts,
+		MaxAttempts: DefaultConnectionAttempts,
 		MaxTimeout:  DefaultConnectionTimeout,
 		Step:        DefaultConnectionAttemptStep,
 	}

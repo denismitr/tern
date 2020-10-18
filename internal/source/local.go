@@ -38,7 +38,6 @@ type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
 type LocalFileSource struct {
 	folder string
 	lg logger.Logger
-	vf migration.VersionFormat
 	versionRegexp *regexp.Regexp
 	nameRegexp *regexp.Regexp
 }

@@ -42,8 +42,8 @@ func createConfigFromYaml(path string) (Config, error) {
 	}
 
 	defer func() {
-		if err := f.Close(); err != nil {
-			panic(err)
+		if errClose := f.Close(); errClose != nil {
+			panic(errClose)
 		}
 	}()
 

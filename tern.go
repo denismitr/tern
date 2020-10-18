@@ -58,11 +58,7 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 
 	m.gateway.SetLogger(m.lg)
 
-	closer := func() error {
-		return m.close()
-	}
-
-	return m, closer, nil
+	return m, m.close, nil
 }
 
 // Migrate the migrations using action configurator callbacks to customize

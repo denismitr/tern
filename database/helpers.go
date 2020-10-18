@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/denismitr/tern/migration"
+	"github.com/pkg/errors"
 	"time"
 )
 
@@ -25,7 +26,17 @@ func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, erro
 
 	var result []migration.Version
 
+	defer rows.Close()
+
 	for rows.Next() {
+		if errRows := rows.Err(); errRows != nil {
+			if errRows != sql.ErrNoRows {
+				return nil, errors.Wrap(errRows, "read migration versions iteration failed")
+			} else {
+				break
+			}
+		}
+
 		var timestamp string
 		var migratedAt time.Time
 		if err := rows.Scan(&timestamp, &migratedAt); err != nil {

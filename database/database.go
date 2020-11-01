@@ -317,7 +317,7 @@ func (db *dbh) rollbackOne(ctx context.Context, ex ctxExecutor, m *migration.Mig
 func (db *dbh) refresh(
 	ctx context.Context,
 	migrations migration.Migrations,
-	plan Plan,
+	p Plan,
 ) (migration.Migrations, migration.Migrations, error) {
 	var rolledBack migration.Migrations
 	var migrated migration.Migrations
@@ -326,22 +326,37 @@ func (db *dbh) refresh(
 		deleteVersionQuery := db.qb.createDeleteVersionQuery()
 		insertVersionQuery := db.qb.createInsertVersionsQuery()
 
+		var scheduled migration.Migrations
 		for i := len(migrations) - 1; i >= 0; i-- {
 			if inVersions(migrations[i].Version, versions) {
-				if err := db.rollbackOne(ctx, tx, migrations[i], deleteVersionQuery); err != nil {
-					return err
+				if p.Steps != 0 && len(scheduled) >= p.Steps {
+					break
 				}
 
-				rolledBack = append(rolledBack, migrations[i])
+				scheduled = append(scheduled, migrations[i])
 			}
 		}
 
-		for i := range migrations {
-			if err := db.migrateOne(ctx, tx, migrations[i], insertVersionQuery); err != nil {
+		if len(scheduled) == 0 {
+			return ErrNothingToMigrate
+		}
+
+		for i := range scheduled {
+			db.lg.Debugf("rolling back: %s", scheduled[i].Key)
+			if err := db.rollbackOne(ctx, tx, scheduled[i], deleteVersionQuery); err != nil {
 				return err
 			}
 
-			migrated = append(migrated, migrations[i])
+			rolledBack = append(rolledBack, scheduled[i])
+			db.lg.Successf("rolled back: %s", scheduled[i].Key)
+		}
+
+		for i := len(scheduled) - 1; i >= 0; i-- {
+			if err := db.migrateOne(ctx, tx, scheduled[i], insertVersionQuery); err != nil {
+				return err
+			}
+
+			migrated = append(migrated, scheduled[i])
 		}
 
 		return nil

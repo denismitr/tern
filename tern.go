@@ -132,13 +132,13 @@ func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migr
 		f(act)
 	}
 
-	migrations, err := m.selector.Select(ctx, source.Filter{})
+	migrations, err := m.selector.Select(ctx, source.Filter{Keys: act.keys})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, nil, err
 	}
 
-	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{})
+	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{Steps: act.steps})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, nil, err

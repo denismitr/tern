@@ -13,6 +13,8 @@ var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
 var ErrNothingToMigrate = errors.New("nothing to migrate")
 var ErrMigrationVersionNotSpecified = errors.New("migration version not specified")
 
+var MigratedAtColumn = "migrated_at";
+
 const (
 	DefaultMigrationsTable = "migrations"
 

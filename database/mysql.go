@@ -15,7 +15,7 @@ const (
 		CREATE TABLE IF NOT EXISTS %s (
 			version VARCHAR(14) PRIMARY KEY,
 			name VARCHAR(120),
-			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
+			%s TIMESTAMP default CURRENT_TIMESTAMP
 		) ENGINE=INNODB;	
 	`
 	mysqlShowTables           = "SHOW TABLES;"
@@ -69,7 +69,7 @@ type mysqlQueryBuilder struct {
 }
 
 func (qb mysqlQueryBuilder) createMigrationsSchemaQuery() string {
-	return fmt.Sprintf(mysqlCreateMigrationsSchema, qb.migrationsTable)
+	return fmt.Sprintf(mysqlCreateMigrationsSchema, qb.migrationsTable, MigratedAtColumn)
 }
 
 func (qb mysqlQueryBuilder) createInsertVersionsQuery() string {

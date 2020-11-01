@@ -19,7 +19,7 @@ func inVersions(version migration.Version, versions []migration.Version) bool {
 }
 
 func readVersions(tx *sql.Tx, migrationsTable string) ([]migration.Version, error) {
-	rows, err := tx.Query(fmt.Sprintf("SELECT version, migrated_at FROM %s", migrationsTable))
+	rows, err := tx.Query(fmt.Sprintf("SELECT version, %s FROM %s", MigratedAtColumn, migrationsTable))
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@ const (
 		CREATE TABLE IF NOT EXISTS %s (
 			version VARCHAR(13) PRIMARY KEY,
 			name VARCHAR(255),
-			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
+			%s TIMESTAMP default CURRENT_TIMESTAMP
 		);	
 	`
 	sqliteDeleteVersionQuery   = "DELETE FROM %s WHERE version = ?;"
@@ -116,7 +116,7 @@ type sqliteQueryBuilder struct {
 }
 
 func (qb sqliteQueryBuilder) createMigrationsSchemaQuery() string {
-	return fmt.Sprintf(sqliteCreateMigrationsSchema, qb.migrationsTable)
+	return fmt.Sprintf(sqliteCreateMigrationsSchema, qb.migrationsTable, MigratedAtColumn)
 }
 
 func (qb sqliteQueryBuilder) createShowTablesQuery() string {

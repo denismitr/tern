@@ -36,7 +36,7 @@ var _ database.Gateway = (*SQLGateway)(nil)
 // NewMySQLGateway - creates a new MySQL gateway and uses the SQLConnector interface to attempt to
 // Connect to the MySQL database
 func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway, database.ConnCloser, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second) // fixme
+	ctx, cancel := context.WithTimeout(context.Background(), connector.Timeout())
 	defer cancel()
 
 	gateway := SQLGateway{}
@@ -59,7 +59,7 @@ func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway
 // NewSqliteGateway - creates a new Sqlite gateway and uses the SQLConnector interface to attempt to
 // Connect to the sqlite database
 func NewSqliteGateway(connector SQLConnector, options *SqliteOptions) (*SQLGateway, database.ConnCloser, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second) // fixme
+	ctx, cancel := context.WithTimeout(context.Background(), connector.Timeout())
 	defer cancel()
 
 	gateway := SQLGateway{}

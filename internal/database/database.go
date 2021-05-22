@@ -24,7 +24,8 @@ const (
 )
 
 type CommonOptions struct {
-	MigrationsTable string
+	MigrationsTable   string
+	MigratedAtColumn  string
 }
 
 type Plan struct {

@@ -2,7 +2,7 @@ package tern
 
 import (
 	"database/sql"
-	database2 "github.com/denismitr/tern/v2/internal/database"
+	"github.com/denismitr/tern/v2/internal/database"
 	"github.com/denismitr/tern/v2/internal/database/sqlgateway"
 	"time"
 )
@@ -17,8 +17,9 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 		mysqlOpts := &sqlgateway.MySQLOptions{
 			LockFor: sqlgateway.MysqlDefaultLockSeconds,
 			LockKey: sqlgateway.MysqlDefaultLockKey,
-			CommonOptions: database2.CommonOptions{
-				MigrationsTable: database2.DefaultMigrationsTable,
+			CommonOptions: database.CommonOptions{
+				MigrationsTable:   database.DefaultMigrationsTable,
+				MigratedAtColumn:  database.MigratedAtColumn,
 			},
 		}
 
@@ -44,8 +45,9 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 func UseSqlite(db *sql.DB, options ...SqliteOptionFunc) OptionFunc {
 	return func(m *Migrator) error {
 		sqliteOpts := &sqlgateway.SqliteOptions{
-			CommonOptions: database2.CommonOptions{
-				MigrationsTable: database2.DefaultMigrationsTable,
+			CommonOptions: database.CommonOptions{
+				MigrationsTable:   database.DefaultMigrationsTable,
+				MigratedAtColumn: database.MigratedAtColumn,
 			},
 		}
 
@@ -71,6 +73,12 @@ func UseSqlite(db *sql.DB, options ...SqliteOptionFunc) OptionFunc {
 func WithSqliteMigrationTable(migrationTable string) SqliteOptionFunc {
 	return func(mysqlOpts *sqlgateway.SqliteOptions, connectOpts *sqlgateway.ConnectOptions) {
 		mysqlOpts.MigrationsTable = migrationTable
+	}
+}
+
+func WithSqliteMigratedAtColumn(column string) SqliteOptionFunc {
+	return func(mysqlOpts *sqlgateway.SqliteOptions, connectOpts *sqlgateway.ConnectOptions) {
+		mysqlOpts.MigratedAtColumn = column
 	}
 }
 
@@ -101,6 +109,12 @@ func WithMySQLLockKey(key string) MySQLOptionFunc {
 func WithMySQLMigrationTable(migrationTable string) MySQLOptionFunc {
 	return func(mysqlOpts *sqlgateway.MySQLOptions, connectOpts *sqlgateway.ConnectOptions) {
 		mysqlOpts.MigrationsTable = migrationTable
+	}
+}
+
+func WithMySQLMigratedAtColumn(column string) MySQLOptionFunc {
+	return func(mysqlOpts *sqlgateway.MySQLOptions, connectOpts *sqlgateway.ConnectOptions) {
+		mysqlOpts.MigratedAtColumn = column
 	}
 }
 

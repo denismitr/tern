@@ -1,9 +1,10 @@
-package database
+package sqlgateway
 
 import (
 	"context"
 	"database/sql"
-	"github.com/denismitr/tern/internal/retry"
+	"github.com/denismitr/tern/v2/internal/database"
+	"github.com/denismitr/tern/v2/internal/retry"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -17,20 +18,20 @@ const (
 type ConnectOptions struct {
 	MaxAttempts int
 	MaxTimeout  time.Duration
-	Step        time.Duration
+	RetryStep   time.Duration
 }
 
 func NewDefaultConnectOptions() *ConnectOptions {
 	return &ConnectOptions{
 		MaxAttempts: DefaultConnectionAttempts,
 		MaxTimeout:  DefaultConnectionTimeout,
-		Step:        DefaultConnectionAttemptStep,
+		RetryStep:   DefaultConnectionAttemptStep,
 	}
 }
 
-type connector interface {
-	connect(ctx context.Context) (*sql.Conn, error)
-	timeout() time.Duration
+type SQLConnector interface {
+	Connect(ctx context.Context) (*sql.Conn, database.ConnCloser, error)
+	Timeout() time.Duration
 }
 
 type RetryingConnector struct {
@@ -38,7 +39,7 @@ type RetryingConnector struct {
 	db *sql.DB
 }
 
-func (c RetryingConnector) timeout() time.Duration {
+func (c RetryingConnector) Timeout() time.Duration {
 	return c.options.MaxTimeout
 }
 
@@ -46,7 +47,7 @@ func MakeRetryingConnector(db *sql.DB, options *ConnectOptions) RetryingConnecto
 	return RetryingConnector{db: db, options: options}
 }
 
-func (c RetryingConnector) connect(ctx context.Context) (*sql.Conn, error) {
+func (c RetryingConnector) Connect(ctx context.Context) (*sql.Conn, database.ConnCloser, error) {
 	var conn *sql.Conn
 	if err := retry.Incremental(ctx, 2*time.Second, c.options.MaxAttempts, func(attempt int) (err error) {
 		conn, err = c.db.Conn(ctx)
@@ -54,10 +55,14 @@ func (c RetryingConnector) connect(ctx context.Context) (*sql.Conn, error) {
 			return retry.Error(errors.Wrap(err, "could not establish DB connection"), attempt)
 		}
 
+		if err := conn.PingContext(ctx); err != nil {
+			return errors.Wrap(err, "db ping failed")
+		}
+
 		return nil
 	}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return conn, nil
+	return conn, conn.Close, nil
 }

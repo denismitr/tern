@@ -2,8 +2,8 @@ package tern
 
 import (
 	"context"
-	"github.com/denismitr/tern/database"
-	"github.com/denismitr/tern/migration"
+	database2 "github.com/denismitr/tern/v2/internal/database"
+	"github.com/denismitr/tern/v2/migration"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
@@ -37,13 +37,6 @@ func Test_Tern_WithSqlite(t *testing.T) {
 
 	defer db.Close()
 
-	gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer gateway.Close()
-
 	t.Run("it_can_migrate_up_and_down_everything_from_a_custom_folder", func(t *testing.T) {
 		m, closer, err := NewMigrator(
 			UseSqlite(db.DB),
@@ -59,7 +52,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		defer cancel()
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
@@ -71,7 +64,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			"1597897177_create_baz_table",
 		}, keys)
 
-		versions, err := gateway.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +77,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
@@ -103,14 +96,14 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		// expect migrations table to be clean
-		versionsAfterRollback, err := gateway.ReadVersions(ctx)
+		versionsAfterRollback, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
 
 		assert.Len(t, versionsAfterRollback, 0)
 
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -119,8 +112,14 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
+		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
+		assert.NoError(t, err)
+		defer func() {
+			assert.NoError(t, closer())
+		}()
+
 		// given we already have a migrations table
-		if err := gateway.CreateMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().CreateMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
@@ -132,21 +131,15 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			},
 		)
 
-		if err := gateway.WriteVersions(ctx, existingMigrations); err != nil {
+		if err := m.dbGateway().WriteVersions(ctx, existingMigrations); err != nil {
 			t.Fatal(err)
 		}
-
-		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
-		assert.NoError(t, err)
-		defer func() {
-			assert.NoError(t, closer())
-		}()
 
 		keys, err := m.Migrate(ctx)
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
-		versions, err := gateway.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -159,7 +152,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		assert.NoError(t, err)
 
 		assert.Len(t, tables, 2)
@@ -173,14 +166,14 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			assert.Equal(t, executed[0].Key, "1597897177_create_baz_table")
 		}
 
-		versionsAfterRollback, err := gateway.ReadVersions(ctx)
+		versionsAfterRollback, err := m.dbGateway().ReadVersions(ctx)
 		assert.NoError(t, err)
 
 		// expect no versions in migrations table
 		assert.Len(t, versionsAfterRollback, 0)
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -189,12 +182,18 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
+		assert.NoError(t, err)
+		defer func() {
+			assert.NoError(t, closer())
+		}()
+
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
 		// given we already have a migrations table
-		if err := gateway.CreateMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().CreateMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
@@ -209,21 +208,15 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if err := gateway.WriteVersions(ctx, existingMigrations); err != nil {
+		if err := m.dbGateway().WriteVersions(ctx, existingMigrations); err != nil {
 			t.Fatal(err)
 		}
 
-		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
-		assert.NoError(t, err)
-		defer func() {
-			assert.NoError(t, closer())
-		}()
-
 		keys, err := m.Migrate(ctx)
-		assert.True(t, errors.Is(err, database.ErrNothingToMigrate))
+		assert.True(t, errors.Is(err, database2.ErrNothingToMigrate))
 		assert.Len(t, keys, 0)
 
-		versions, err := gateway.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -236,7 +229,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		assert.NoError(t, err)
 
 		assert.Len(t, tables, 1)
@@ -249,14 +242,14 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			assert.Len(t, executed, 3)
 		}
 
-		versionsAfterRollback, err := gateway.ReadVersions(ctx)
+		versionsAfterRollback, err := m.dbGateway().ReadVersions(ctx)
 		assert.NoError(t, err)
 
 		// expect no versions in migrations table
 		assert.Len(t, versionsAfterRollback, 0)
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -276,14 +269,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
-		gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		defer gateway.Close()
-
-		versions, err := gateway.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -294,13 +280,13 @@ func Test_Tern_WithSqlite(t *testing.T) {
 
 		// expect 2 tables to exist now in the DB
 		// the migrations table and baz table created by the only script that ran
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
 
 		assert.Len(t, tables, 2)
-		assert.Equal(t, []string{"foo", database.DefaultMigrationsTable}, tables)
+		assert.Equal(t, []string{"foo", database2.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
 		if executed, err := m.Rollback(ctx); err != nil {
@@ -310,7 +296,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -334,14 +320,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
-		gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		defer gateway.Close()
-
-		versions, err := gateway.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -350,13 +329,13 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		assert.Len(t, versions, 1)
 		assert.Equal(t, "1596897188", versions[0].Value)
 
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
 
 		assert.Len(t, tables, 2)
-		assert.Equal(t, []string{"bar", database.DefaultMigrationsTable}, tables)
+		assert.Equal(t, []string{"bar", database2.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
 		if executed, err := m.Rollback(ctx); err != nil {
@@ -366,7 +345,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -391,15 +370,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		assert.Len(t, rolledBack, 3)
 		assert.Len(t, migrated, 3)
 
-
-		gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		defer gateway.Close()
-
-		versions, err := gateway.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -412,7 +383,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 
 		// expect 4 tables to exist still in the DB
 		// migrations table and 3 tables created by scripts
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
@@ -431,7 +402,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -447,7 +418,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		defer cancel()
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
@@ -465,7 +436,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		// expect migrations table to be clean
-		versionsAfterRollback, err := gateway.ReadVersions(ctx)
+		versionsAfterRollback, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
@@ -475,7 +446,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
@@ -483,7 +454,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		assert.Len(t, tables, 2)
 		assert.Equal(t, []string{"foo", "migrations"}, tables)
 
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -497,13 +468,6 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 	}
 
 	defer db.Close()
-
-	gateway, err := database.CreateServiceGateway(db.DriverName(), db.DB, database.DefaultMigrationsTable)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer gateway.Close()
 
 	t.Run("it can migrate and rollback all in memory migrations", func(t *testing.T) {
 		source := UseInMemorySource(
@@ -538,7 +502,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 		defer cancel()
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
@@ -550,7 +514,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			"1597897177_create_baz_table",
 		}, keys)
 
-		versions, err := gateway.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -563,7 +527,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
@@ -582,14 +546,14 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 		}
 
 		// expect migrations table to be clean
-		versionsAfterRollback, err := gateway.ReadVersions(ctx)
+		versionsAfterRollback, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
 
 		assert.Len(t, versionsAfterRollback, 0)
 
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -630,7 +594,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 		defer cancel()
 
 		// DO: clean up
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
@@ -642,7 +606,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			"1597897177_create_baz_table",
 		}, keys)
 
-		versions, err := gateway.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -655,7 +619,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
-		tables, err := gateway.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
@@ -674,14 +638,14 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 		}
 
 		// expect migrations table to be clean
-		versionsAfterRollback, err := gateway.ReadVersions(ctx)
+		versionsAfterRollback, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
 
 		assert.Len(t, versionsAfterRollback, 0)
 
-		if err := gateway.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -708,13 +672,6 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			),
 		)
 
-		sg, err := database.CreateServiceGateway(db.DriverName(), db.DB, "migration_versions")
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		defer sg.Close()
-
 		m, closer, err := NewMigrator(
 			UseSqlite(
 				db.DB,
@@ -735,7 +692,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 		defer cancel()
 
 		// DO: clean up
-		if err := sg.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 
@@ -747,7 +704,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			"1597897177_create_baz_table",
 		}, keys)
 
-		versions, err := sg.ReadVersions(ctx)
+		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -760,7 +717,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 
 		// expect 4 tables to exist now in the DB
 		// migrations table and 3 tables created by scripts
-		tables, err := sg.ShowTables(ctx)
+		tables, err := m.dbGateway().ShowTables(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
@@ -779,14 +736,14 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 		}
 
 		// expect migrations table to be clean
-		versionsAfterRollback, err := sg.ReadVersions(ctx)
+		versionsAfterRollback, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
 			assert.NoError(t, err)
 		}
 
 		assert.Len(t, versionsAfterRollback, 0)
 
-		if err := sg.DropMigrationsTable(ctx); err != nil {
+		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
 	})

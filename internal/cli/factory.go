@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"github.com/denismitr/tern"
-	"github.com/denismitr/tern/migration"
+	"github.com/denismitr/tern/v2"
+	"github.com/denismitr/tern/v2/migration"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"

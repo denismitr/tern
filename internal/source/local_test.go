@@ -3,8 +3,8 @@ package source
 import (
 	"context"
 	"fmt"
-	"github.com/denismitr/tern/internal/logger"
-	"github.com/denismitr/tern/migration"
+	"github.com/denismitr/tern/v2/internal/logger"
+	"github.com/denismitr/tern/v2/migration"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"path/filepath"

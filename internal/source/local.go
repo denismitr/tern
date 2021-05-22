@@ -2,8 +2,8 @@ package source
 
 import (
 	"context"
-	"github.com/denismitr/tern/internal/logger"
-	"github.com/denismitr/tern/migration"
+	"github.com/denismitr/tern/v2/internal/logger"
+	"github.com/denismitr/tern/v2/migration"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"

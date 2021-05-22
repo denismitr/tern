@@ -1,4 +1,5 @@
 GO=go
+GOMOD=$(GO) mod
 GOTEST=$(GO) test ./... -race
 GOCOVER=$(GO) tool cover
 COVEROUT=./cover/c.out
@@ -6,6 +7,7 @@ COVEROUT=./cover/c.out
 .PHONY: test up down
 
 up:
+	@echo Starting the database
 	docker-compose up -d
 
 down:
@@ -22,6 +24,11 @@ test:
 test/cover:
 	@echo Starting tests with coverage
 	$(GOTEST) -cover -coverpkg=./... -coverprofile=$(COVEROUT) . && $(GOCOVER) -html=$(COVEROUT)
+
+deps:
+	@echo Updating dependencies
+	$(GOMOD) tidy
+	$(GOMOD) vendor
 
 lint:
 	golangci-lint run ./...

@@ -4,8 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/denismitr/tern/database"
-	"github.com/denismitr/tern/internal/cli"
+	"github.com/denismitr/tern/v2/internal/cli"
+	database2 "github.com/denismitr/tern/v2/internal/database"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/pkg/errors"
 	"time"
@@ -111,7 +111,7 @@ func migrate(app *cli.App, steps, timeout int) {
 	defer cancel()
 
 	if err := app.Migrate(ctx, cli.ActionConfig{Steps: steps}); err != nil {
-		if errors.Is(err, database.ErrNothingToMigrate) {
+		if errors.Is(err, database2.ErrNothingToMigrate) {
 			green("Nothing to migrate")
 			return
 		}

@@ -2,10 +2,11 @@ package tern
 
 import (
 	"context"
-	"github.com/denismitr/tern/database"
-	"github.com/denismitr/tern/internal/logger"
-	"github.com/denismitr/tern/internal/source"
-	"github.com/denismitr/tern/migration"
+	"github.com/denismitr/tern/v2/internal/database"
+	"github.com/denismitr/tern/v2/internal/database/sqlgateway"
+	"github.com/denismitr/tern/v2/internal/logger"
+	"github.com/denismitr/tern/v2/internal/source"
+	"github.com/denismitr/tern/v2/migration"
 	"github.com/pkg/errors"
 )
 
@@ -13,11 +14,16 @@ var ErrGatewayNotInitialized = errors.New("database gateway has not been initial
 
 type CloserFunc func() error
 
+var ErrNothingToMigrate = errors.New("nothing to migrate")
+var ErrNothingToRollback = errors.New("nothing to rollback")
+var ErrNothingToMigrateOrRollback = errors.New("nothing to migrate or rollback")
+
 type Migrator struct {
 	lg             logger.Logger
 	gateway        database.Gateway
 	selector       source.Selector
-	connectOptions *database.ConnectOptions
+	connectOptions *sqlgateway.ConnectOptions
+	closerFns      []CloserFunc
 }
 
 // NewMigrator creates a migrator using the sql.DB and option callbacks
@@ -45,10 +51,6 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 			migration.TimestampFormat,
 		)
 
-		if gatewayErr := m.gateway.Close(); gatewayErr != nil {
-			return nil, nil, errors.Wrap(err, gatewayErr.Error())
-		}
-
 		if err != nil {
 			return nil, nil, err
 		}
@@ -58,7 +60,17 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 
 	m.gateway.SetLogger(m.lg)
 
-	return m, m.close, nil
+	closer := func() error {
+		for _, fn := range m.closerFns {
+			if err := fn(); err != nil {
+				return err // fixme
+			}
+		}
+
+		return nil
+	}
+
+	return m, closer, nil
 }
 
 // Migrate the migrations using action configurator callbacks to customize
@@ -79,8 +91,10 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
 		if !errors.Is(err, database.ErrNothingToMigrate) {
-			m.lg.Error(err)
+			return nil, ErrNothingToMigrate
 		}
+
+		m.lg.Error(err)
 
 		return nil, err
 	}
@@ -104,24 +118,15 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 
 	executed, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps})
 	if err != nil {
+		if errors.Is(err, database.ErrNothingToRollback) {
+			return nil, ErrNothingToRollback
+		}
+
 		m.lg.Error(err)
 		return nil, errors.Wrap(err, "could not rollback migrations")
 	}
 
 	return executed, nil
-}
-
-// Close the migrator
-func (m *Migrator) close() error {
-	if m.gateway == nil {
-		return ErrGatewayNotInitialized
-	}
-
-	if err := m.gateway.Close(); err != nil {
-		m.lg.Error(err)
-	}
-
-	return nil
 }
 
 // Refresh first rollbacks the migrations and then migrates them again
@@ -140,6 +145,10 @@ func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migr
 
 	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{Steps: act.steps})
 	if err != nil {
+		if errors.Is(err, database.ErrNothingToMigrateOrRollback) {
+			return nil, nil, ErrNothingToMigrateOrRollback
+		}
+
 		m.lg.Error(err)
 		return nil, nil, err
 	}
@@ -154,4 +163,8 @@ func (m *Migrator) Source() source.Source {
 	}
 
 	return nil
+}
+
+func (m *Migrator) dbGateway() database.Gateway {
+	return m.gateway
 }

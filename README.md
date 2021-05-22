@@ -79,7 +79,7 @@ if err != nil {
 
 defer db.Close()
 
-m, err := tern.NewMigrator(
+m, closer, err := tern.NewMigrator(
     tern.UseMySQL(db.DB), // db.DB is actually *sql.DB
     tern.UseLocalFolderSource("./migrations"),
 )
@@ -95,6 +95,8 @@ m, err := tern.NewMigrator(
 if err != nil {
     panic(err)
 }
+
+defer closer()
 
 ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
 defer cancel()

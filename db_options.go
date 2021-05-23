@@ -30,10 +30,7 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 		}
 
 		connector := sqlgateway.MakeRetryingConnector(db, connectOpts)
-		gateway, closer, err := sqlgateway.NewMySQLGateway(connector, mysqlOpts)
-		if err != nil {
-			return err
-		}
+		gateway, closer := sqlgateway.NewMySQLGateway(connector, mysqlOpts)
 
 		m.closerFns = append(m.closerFns, CloserFunc(closer))
 		m.gateway = gateway
@@ -58,10 +55,7 @@ func UseSqlite(db *sql.DB, options ...SqliteOptionFunc) OptionFunc {
 		}
 
 		connector := sqlgateway.MakeRetryingConnector(db, connectOpts)
-		gateway, closer, err := sqlgateway.NewSqliteGateway(connector, sqliteOpts)
-		if err != nil {
-			return err
-		}
+		gateway, closer := sqlgateway.NewSqliteGateway(connector, sqliteOpts)
 
 		m.gateway = gateway
 		m.closerFns = append(m.closerFns, CloserFunc(closer))

@@ -20,7 +20,7 @@ type ctxExecutor interface {
 type MySQLOptions struct {
 	database.CommonOptions
 	LockKey string
-	LockFor int
+	LockFor int // maybe refactor to duration
 	NoLock  bool
 }
 
@@ -36,7 +36,7 @@ var _ database.Gateway = (*SQLGateway)(nil)
 
 // NewMySQLGateway - creates a new MySQL gateway and uses the SQLConnector interface to attempt to
 // Connect to the MySQL database
-func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway, database.ConnCloser, error) {
+func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway, database.ConnCloser) {
 	gateway := SQLGateway{}
 	gateway.connector = connector
 	gateway.locker = &mySQLLocker{
@@ -44,19 +44,37 @@ func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway
 		lockFor: options.LockFor,
 		noLock:  options.NoLock,
 	}
-	gateway.schema = newMysqlSchemaV1(options.MigrationsTable, database.MigratedAtColumn, "utf8")
 
-	return &gateway, connector.Close, nil
+	if options.MigrationsTable == "" {
+		options.MigrationsTable = database.DefaultMigrationsTable
+	}
+
+	if options.MigratedAtColumn == "" {
+		options.MigratedAtColumn = database.MigratedAtColumn
+	}
+
+	gateway.schema = newMysqlSchemaV1(options.MigrationsTable, options.MigratedAtColumn, "utf8")
+
+	return &gateway, connector.Close
 }
 
 // NewSqliteGateway - creates a new SQL gateway
-func NewSqliteGateway(connector SQLConnector, options *SqliteOptions) (*SQLGateway, database.ConnCloser, error) {
+func NewSqliteGateway(connector SQLConnector, options *SqliteOptions) (*SQLGateway, database.ConnCloser) {
 	gateway := SQLGateway{}
 	gateway.connector = connector
 	gateway.locker = &database.NullLocker{}
-	gateway.schema = newSqliteSchemaV1(options.MigrationsTable, database.MigratedAtColumn)
 
-	return &gateway, connector.Close, nil
+	if options.MigrationsTable == "" {
+		options.MigrationsTable = database.DefaultMigrationsTable
+	}
+
+	if options.MigratedAtColumn == "" {
+		options.MigratedAtColumn = database.MigratedAtColumn
+	}
+
+	gateway.schema = newSqliteSchemaV1(options.MigrationsTable, options.MigratedAtColumn)
+
+	return &gateway, connector.Close
 }
 
 func (g *SQLGateway) SetLogger(lg logger.Logger) {

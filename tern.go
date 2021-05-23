@@ -87,6 +87,10 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 		return nil, err
 	}
 
+	if err := m.gateway.Connect(); err != nil {
+		return nil, err
+	}
+
 	p := database.Plan{Steps: act.steps}
 	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
@@ -116,6 +120,10 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 		return nil, errors.Wrap(err, "could not rollback migrations")
 	}
 
+	if err := m.gateway.Connect(); err != nil {
+		return nil, err
+	}
+
 	executed, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps})
 	if err != nil {
 		if errors.Is(err, database.ErrNothingToRollback) {
@@ -143,6 +151,10 @@ func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migr
 		return nil, nil, err
 	}
 
+	if err := m.gateway.Connect(); err != nil {
+		return nil, nil, err
+	}
+
 	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{Steps: act.steps})
 	if err != nil {
 		if errors.Is(err, database.ErrNothingToMigrateOrRollback) {
@@ -165,6 +177,11 @@ func (m *Migrator) Source() source.Source {
 	return nil
 }
 
+// dbGateway - return database gateway for internal testing usage
 func (m *Migrator) dbGateway() database.Gateway {
+	if err := m.gateway.Connect(); err != nil {
+		panic(err)
+	}
+
 	return m.gateway
 }

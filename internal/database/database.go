@@ -32,17 +32,22 @@ type Plan struct {
 	Steps int
 }
 
-type Gateway interface {
-	SetLogger(logger.Logger)
-	Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
-	Rollback(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
-	Refresh(ctx context.Context, migrations migration.Migrations, plan Plan) (migration.Migrations, migration.Migrations, error)
-
+type versionController interface {
 	WriteVersions(ctx context.Context, migrations migration.Migrations) error
 	ReadVersions(ctx context.Context) ([]migration.Version, error)
 	ShowTables(ctx context.Context) ([]string, error)
 	DropMigrationsTable(ctx context.Context) error
 	CreateMigrationsTable(ctx context.Context) error
+}
+
+type Gateway interface {
+	SetLogger(logger.Logger)
+	Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
+	Rollback(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
+	Refresh(ctx context.Context, migrations migration.Migrations, plan Plan) (migration.Migrations, migration.Migrations, error)
+	Connect() error
+
+	versionController
 }
 
 type ConnCloser func() error

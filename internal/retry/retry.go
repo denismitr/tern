@@ -8,8 +8,9 @@ import (
 )
 
 var ErrTooManyAttempts = errors.New("too many retry attempts")
+var ErrContextEnded = errors.New("context ended")
 
-type Callable func(attempt int) error
+type Callable func(attempt int) (interface{}, error)
 
 type retryError struct {
 	error
@@ -28,33 +29,38 @@ type Attempts interface {
 	Current() int
 }
 
-func start(ctx context.Context, a Attempts, cb Callable) error {
+func start(ctx context.Context, a Attempts, cb Callable) (interface{}, error) {
 	for {
-		err := cb(a.Current())
-		if err == nil {
-			return nil
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Wrap(ErrContextEnded, err.Error())
 		}
 
-		// callable encountered an unrecoverable error
+		result, err := cb(a.Current())
+		if err == nil {
+			return result, nil
+		}
+
+		// если не ошибка типа retryError
+		// нужно закончить дальнейшиие попытки
 		if _, ok := err.(*retryError); !ok {
-			return errors.Wrapf(err, "retry %d failed", a.Current())
+			return nil, errors.Wrapf(err, "retry %d failed", a.Current())
 		}
 
 		next, stop := a.Next()
 		if stop {
-			return ErrTooManyAttempts
+			return nil, ErrTooManyAttempts
 		}
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, errors.Wrap(ErrContextEnded, ctx.Err().Error())
 		case <-time.After(next):
 			continue
 		}
 	}
 }
 
-func Incremental(ctx context.Context, step time.Duration, maxRetries int, cb Callable) error {
+func Incremental(ctx context.Context, step time.Duration, maxRetries int, cb Callable) (interface{}, error) {
 	return start(ctx, IncrementalAttempts(step, maxRetries), cb)
 }
 
@@ -62,7 +68,7 @@ type incrementalAttempts struct {
 	sync.RWMutex
 	prev time.Duration
 	step time.Duration
-	max int
+	max  int
 	curr int
 }
 
@@ -75,6 +81,9 @@ func (a *incrementalAttempts) Next() (time.Duration, bool) {
 		return 0, true
 	}
 
+	// если пред. шаг был 0.5с а шаг 0.25c
+	// то след шаг будет через 0.5c + 0.25c = 0.75с
+	// еще след шаг будет занимать уже 1c и тд
 	next := a.prev + a.step
 	a.prev = next
 
@@ -91,7 +100,7 @@ func IncrementalAttempts(step time.Duration, max int) Attempts {
 	return &incrementalAttempts{
 		prev: 0,
 		step: step,
-		max: max,
+		max:  max,
 		curr: 1,
 	}
 }

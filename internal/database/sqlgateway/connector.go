@@ -3,7 +3,6 @@ package sqlgateway
 import (
 	"context"
 	"database/sql"
-	"github.com/denismitr/tern/v2/internal/database"
 	"github.com/denismitr/tern/v2/internal/retry"
 	"github.com/pkg/errors"
 	"time"
@@ -30,39 +29,57 @@ func NewDefaultConnectOptions() *ConnectOptions {
 }
 
 type SQLConnector interface {
-	Connect(ctx context.Context) (*sql.Conn, database.ConnCloser, error)
+	Connect(ctx context.Context) (*sql.Conn, error)
 	Timeout() time.Duration
+	Close() error
 }
 
 type RetryingConnector struct {
 	options *ConnectOptions
 	db *sql.DB
+	conn *sql.Conn
 }
 
 func (c RetryingConnector) Timeout() time.Duration {
 	return c.options.MaxTimeout
 }
 
-func MakeRetryingConnector(db *sql.DB, options *ConnectOptions) RetryingConnector {
-	return RetryingConnector{db: db, options: options}
+func MakeRetryingConnector(db *sql.DB, options *ConnectOptions) *RetryingConnector {
+	return &RetryingConnector{db: db, options: options}
 }
 
-func (c RetryingConnector) Connect(ctx context.Context) (*sql.Conn, database.ConnCloser, error) {
-	var conn *sql.Conn
-	if err := retry.Incremental(ctx, 2*time.Second, c.options.MaxAttempts, func(attempt int) (err error) {
-		conn, err = c.db.Conn(ctx)
+func (c *RetryingConnector) Connect(ctx context.Context) (*sql.Conn, error) {
+	result, err := retry.Incremental(ctx, 2*time.Second, c.options.MaxAttempts, func(attempt int) (interface{}, error) {
+		conn, err := c.db.Conn(ctx)
 		if err != nil {
-			return retry.Error(errors.Wrap(err, "could not establish DB connection"), attempt)
+			return nil, retry.Error(errors.Wrap(err, "could not establish DB connection"), attempt)
 		}
 
 		if err := conn.PingContext(ctx); err != nil {
-			return errors.Wrap(err, "db ping failed")
+			return nil, errors.Wrap(err, "db ping failed")
 		}
 
-		return nil
-	}); err != nil {
-		return nil, nil, err
+		return conn, nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	return conn, conn.Close, nil
+	conn, ok := result.(*sql.Conn)
+	if !ok {
+		panic("how could result not be an instance of *sql.Conn")
+	}
+
+	return conn, nil
+}
+
+func (c *RetryingConnector) Close() error {
+	if c.conn != nil {
+		if err := c.conn.Close(); err != nil {
+			return errors.Wrap(err, "retrying connector could not close the connection")
+		}
+	}
+
+	return nil
 }

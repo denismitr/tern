@@ -1,6 +1,6 @@
 GO=go
 GOMOD=$(GO) mod
-GOTEST=$(GO) test ./... -race
+GOTEST=$(GO) test ./... -cover -race
 GOCOVER=$(GO) tool cover
 COVEROUT=./cover/c.out
 

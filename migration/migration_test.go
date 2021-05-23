@@ -107,3 +107,43 @@ func Test_GenerateVersion_InTimestampFormat(t *testing.T) {
 	assert.Equal(t, versionDt.Format, DatetimeFormat)
 	assert.Equal(t, "20190102171819", versionDt.Value)
 }
+
+func TestInVersions(t *testing.T) {
+	tt := []struct{
+		name string
+		version Version
+		versions []Version
+		expected bool
+	}{
+		{
+			name: "one version and one match in timestamp format",
+			version: Version{
+				Format: TimestampFormat,
+				Value: "1546449499",
+			},
+			versions: []Version{
+				{Value: "1546449499", Format: TimestampFormat},
+			},
+			expected: true,
+		},
+		{
+			name: "two versions and no match in timestamp format",
+			version: Version{
+				Format: TimestampFormat,
+				Value: "1546449499",
+			},
+			versions: []Version{
+				{Value: "1546449498", Format: TimestampFormat},
+				{Value: "1546446497", Format: TimestampFormat},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			result := InVersions(tc.version, tc.versions)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}

@@ -204,3 +204,13 @@ func SetVersionFormat(m *Migration) error {
 
 	return nil
 }
+
+func InVersions(version Version, versions []Version) bool {
+	for _, v := range versions {
+		if v.Value == version.Value {
+			return true
+		}
+	}
+
+	return false
+}

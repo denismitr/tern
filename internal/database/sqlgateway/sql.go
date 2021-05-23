@@ -25,10 +25,11 @@ type MySQLOptions struct {
 }
 
 type SQLGateway struct {
-	locker          database.Locker
-	lg              logger.Logger
-	conn            *sql.Conn
-	schema          schema
+	locker    database.Locker
+	lg        logger.Logger
+	conn      *sql.Conn
+	connector SQLConnector
+	schema    schema
 }
 
 var _ database.Gateway = (*SQLGateway)(nil)
@@ -36,16 +37,8 @@ var _ database.Gateway = (*SQLGateway)(nil)
 // NewMySQLGateway - creates a new MySQL gateway and uses the SQLConnector interface to attempt to
 // Connect to the MySQL database
 func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway, database.ConnCloser, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), connector.Timeout())
-	defer cancel()
-
 	gateway := SQLGateway{}
-	conn, closer, err := connector.Connect(ctx);
-	if err != nil {
-		return nil, nil, err
-	}
-
-	gateway.conn = conn
+	gateway.connector = connector
 	gateway.locker = &mySQLLocker{
 		lockKey: options.LockKey,
 		lockFor: options.LockFor,
@@ -53,30 +46,38 @@ func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway
 	}
 	gateway.schema = newMysqlSchemaV1(options.MigrationsTable, database.MigratedAtColumn, "utf8")
 
-	return &gateway, closer, nil
+	return &gateway, connector.Close, nil
 }
 
-// NewSqliteGateway - creates a new Sqlite gateway and uses the SQLConnector interface to attempt to
-// Connect to the sqlite database
+// NewSqliteGateway - creates a new SQL gateway
 func NewSqliteGateway(connector SQLConnector, options *SqliteOptions) (*SQLGateway, database.ConnCloser, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), connector.Timeout())
-	defer cancel()
-
 	gateway := SQLGateway{}
-	conn, closer, err := connector.Connect(ctx);
-	if err != nil {
-		return nil, nil, err
-	}
-
-	gateway.conn = conn
+	gateway.connector = connector
 	gateway.locker = &database.NullLocker{}
 	gateway.schema = newSqliteSchemaV1(options.MigrationsTable, database.MigratedAtColumn)
 
-	return &gateway, closer, nil
+	return &gateway, connector.Close, nil
 }
 
 func (g *SQLGateway) SetLogger(lg logger.Logger) {
 	g.lg = lg
+}
+
+func (g *SQLGateway) Connect() error {
+	if g.conn != nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), g.connector.Timeout())
+	defer cancel()
+
+	conn, err := g.connector.Connect(ctx)
+	if err != nil {
+		return err
+	}
+
+	g.conn = conn
+	return nil
 }
 
 func (g *SQLGateway) Migrate(ctx context.Context, migrations migration.Migrations, p database.Plan) (migration.Migrations, error) {
@@ -85,7 +86,7 @@ func (g *SQLGateway) Migrate(ctx context.Context, migrations migration.Migration
 	if err := g.execUnderLock(ctx, database.OperationMigrate, func(tx *sql.Tx, migratedVersions []migration.Version) error {
 		var scheduled migration.Migrations
 		for i := range migrations {
-			if !database.InVersions(migrations[i].Version, migratedVersions) {
+			if !migration.InVersions(migrations[i].Version, migratedVersions) {
 				if p.Steps != 0 && len(scheduled) >= p.Steps {
 					break
 				}
@@ -122,7 +123,7 @@ func (g *SQLGateway) Rollback(ctx context.Context, migrations migration.Migratio
 	if err := g.execUnderLock(ctx, database.OperationRollback, func(tx *sql.Tx, migratedVersions []migration.Version) error {
 		var scheduled migration.Migrations
 		for i := len(migrations) - 1; i >= 0; i-- {
-			if database.InVersions(migrations[i].Version, migratedVersions) {
+			if migration.InVersions(migrations[i].Version, migratedVersions) {
 				if p.Steps != 0 && len(scheduled) >= p.Steps {
 					break
 				}
@@ -165,7 +166,7 @@ func (g *SQLGateway) Refresh(
 	if err := g.execUnderLock(ctx, database.OperationRefresh, func(tx *sql.Tx, versions []migration.Version) error {
 		var scheduled migration.Migrations
 		for i := len(migrations) - 1; i >= 0; i-- {
-			if database.InVersions(migrations[i].Version, versions) {
+			if migration.InVersions(migrations[i].Version, versions) {
 				if p.Steps != 0 && len(scheduled) >= p.Steps {
 					break
 				}
@@ -352,7 +353,6 @@ func (g *SQLGateway) execUnderLock(ctx context.Context, operation string, f func
 
 	return g.locker.Unlock(ctx, g.conn)
 }
-
 
 func (g *SQLGateway) migrateOne(ctx context.Context, tx ctxExecutor, m *migration.Migration) error {
 	if m.Version.Value == "" {

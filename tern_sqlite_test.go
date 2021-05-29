@@ -472,19 +472,19 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 	t.Run("it can migrate and rollback all in memory migrations", func(t *testing.T) {
 		source := UseInMemorySource(
 			migration.New(
-				"1596897167",
+				migration.Timestamp("1596897167"),
 				"Create foo table",
 				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY);"},
 				[]string{"DROP TABLE IF EXISTS foo;"},
 			),
 			migration.New(
-				"1596897188",
+				migration.Timestamp("1596897188"),
 				"Create bar table",
 				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY);"},
 				[]string{"DROP TABLE IF EXISTS bar;"},
 			),
 			migration.New(
-				"1597897177",
+				migration.Timestamp("1597897177"),
 				"Create baz table",
 				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL);"},
 				[]string{"DROP TABLE IF EXISTS baz;"},
@@ -561,19 +561,19 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 	t.Run("it can migrate and rollback all in memory migrations using connect options", func(t *testing.T) {
 		source := UseInMemorySource(
 			migration.New(
-				"1596897167",
+				migration.Timestamp("1596897167"),
 				"Create foo table",
 				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY)"},
 				[]string{"DROP TABLE IF EXISTS foo;"},
 			),
 			migration.New(
-				"1596897188",
+				migration.Timestamp("1596897188"),
 				"Create bar table",
 				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY)"},
 				[]string{"DROP TABLE IF EXISTS bar;"},
 			),
 			migration.New(
-				"1597897177",
+				migration.Timestamp("1597897177"),
 				"Create baz table",
 				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL)"},
 				[]string{"DROP TABLE IF EXISTS baz;"},
@@ -653,19 +653,19 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 	t.Run("it can migrate and rollback all in memory migrations using sqlite config", func(t *testing.T) {
 		source := UseInMemorySource(
 			migration.New(
-				"1596897167",
+				migration.Timestamp("1596897167"),
 				"Create foo table",
 				[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY)"},
 				[]string{"DROP TABLE IF EXISTS foo;"},
 			),
 			migration.New(
-				"1596897188",
+				migration.Timestamp("1596897188"),
 				"Create bar table",
 				[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY)"},
 				[]string{"DROP TABLE IF EXISTS bar;"},
 			),
 			migration.New(
-				"1597897177",
+				migration.Timestamp("1597897177"),
 				"Create baz table",
 				[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY, name varchar(10), length INT NOT NULL)"},
 				[]string{"DROP TABLE IF EXISTS baz;"},

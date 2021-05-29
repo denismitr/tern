@@ -1,7 +1,10 @@
 package migration
 
 import (
+	"fmt"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"sort"
 	"testing"
 	"time"
@@ -146,4 +149,134 @@ func TestInVersions(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestTimestampVersion(t *testing.T) {
+	t.Parallel()
+
+	validInputs := []struct{
+		t string
+	}{
+		{"154644949"},
+		{"1546449498"},
+		{"15464494912"},
+		{"154644949125"},
+	}
+
+	for _, tc := range validInputs {
+		t.Run(tc.t, func(t *testing.T) {
+			result, err := Timestamp(tc.t)()
+			require.NoError(t, err)
+			assert.Equal(t, tc.t, result.Value)
+			assert.Equal(t, TimestampFormat, result.Format)
+			assert.True(t, result.MigratedAt.IsZero())
+		})
+	}
+
+	invalidInputs := []struct{
+		t string
+	}{
+		{""},
+		{"foo"},
+		{"1543barbaz"},
+		{"15434566"},
+		{"15464494945678"},
+	}
+
+	for _, tc := range invalidInputs {
+		t.Run(tc.t, func(t *testing.T) {
+			{
+				result, err := Timestamp(tc.t)()
+				require.Error(t, err)
+				assert.True(t, errors.Is(err, ErrInvalidVersionFormat))
+				assert.Equal(t, "", result.Value)
+			}
+		})
+	}
+}
+
+func TestDateTimeVersion(t *testing.T) {
+	t.Parallel()
+
+	validInputs := []struct{
+		year int
+		month int
+		day int
+		hour int
+		minute int
+		second int
+		exp string
+	}{
+		{
+			year: 2019,
+			month: 1,
+			day: 30,
+			hour: 10,
+			minute: 5,
+			second: 59,
+			exp: "20190130100559",
+		},
+	}
+
+	for _, tc := range validInputs {
+		t.Run(tc.exp, func(t *testing.T) {
+			result, err := DateTime(tc.year, tc.month, tc.day, tc.hour, tc.minute, tc.second)()
+			require.NoError(t, err)
+			assert.Equal(t, tc.exp, result.Value)
+			assert.Equal(t, DatetimeFormat, result.Format)
+			assert.True(t, result.MigratedAt.IsZero())
+		})
+	}
+}
+
+func TestNumberFormat(t *testing.T) {
+	t.Parallel()
+
+	validInputs := []struct{
+		n uint
+		exp string
+	}{
+		{n: 1, exp: "00000000000001"},
+		{n: 9, exp: "00000000000009"},
+		{n: 879, exp: "00000000000879"},
+		{n: 123_456_789_000_00, exp: "12345678900000"},
+	}
+
+	for _, tc := range validInputs {
+		t.Run(tc.exp, func(t *testing.T) {
+			v, err := Number(tc.n)()
+			require.NoError(t, err)
+			assert.Equal(t, tc.exp, v.Value)
+			assert.Equal(t, NumberFormat, v.Format)
+			assert.True(t, v.MigratedAt.IsZero())
+		})
+	}
+
+	invalidInputs := []struct{
+		n uint
+	}{
+		{n: 123_456_789_000_000},
+	}
+
+	for _, tc := range invalidInputs {
+		t.Run(fmt.Sprintf("%d", tc.n), func(t *testing.T) {
+			_, err := Number(tc.n)()
+			require.Error(t, err)
+			assert.True(t, errors.Is(err, ErrInvalidVersionFormat))
+		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	t.Run("from number", func(t *testing.T) {
+		f := New(Number(1), "foo", []string{"SELECT 1"}, []string{})
+		m, err := f()
+
+		require.NoError(t, err)
+		assert.Equal(t, "foo", m.Name)
+		assert.Equal(t, "00000000000001_foo", m.Key)
+		assert.Equal(t, "00000000000001", m.Version.Value)
+		assert.Equal(t, NumberFormat, m.Version.Format)
+	})
+
 }

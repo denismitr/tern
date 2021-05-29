@@ -43,7 +43,7 @@ type LocalFileSource struct {
 }
 
 func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
-	key := migration.CreateKeyFromTimestampAndName(dt, name)
+	key := migration.CreateKeyFromVersionAndName(dt, name)
 	migrateFilename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
 	mf, err := os.Create(migrateFilename)
 	if err != nil {
@@ -105,7 +105,7 @@ func (lfs *LocalFileSource) IsValid() bool {
 }
 
 func (lfs *LocalFileSource) AlreadyExists(dt, name string) bool {
-	key := migration.CreateKeyFromTimestampAndName(dt, name)
+	key := migration.CreateKeyFromVersionAndName(dt, name)
 	filename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {

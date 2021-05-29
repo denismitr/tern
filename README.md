@@ -113,16 +113,33 @@ fmt.Printf("%#v", migrated)
 Apart from `Migrate` command, there are `Rollback` and `Refresh` commands.
 
 #### In memory source
+
 ```go
-    source := tern.UseInMemorySource(
+package main
+
+import (
+	"context"
+	"fmt"
+	"github.com/denismitr/tern/v2"
+	"github.com/denismitr/tern/v2/migration"
+	"database/sql"
+)
+
+func main() {
+	db, err := sql.Open("mysql", "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true")
+	if err != nil {
+		panic(err)
+	}
+
+	source := tern.UseInMemorySource(
 		migration.New(
-			"20201011221745", // datetime or timestamp must be valid otherwise New panics
+			migration.DateTime(2020, 10, 11, 22, 17, 45),
 			"Create foo table",
-			[]string{createFooTable}, // constant
+			[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY) ENGINE=INNODB;"},
 			[]string{"DROP TABLE IF EXISTS foo;"},
 		),
 		migration.New(
-			"20201011222145",
+			migration.DateTime(2020, 10, 11, 22, 21, 45),
 			"Add price column",
 			[]string{"ALTER TABLE foo ADD price INT UNSIGNED NOT NULL DEFAULT 0"},
 			[]string{"ALTER TABLE foo DROP price"},
@@ -137,4 +154,21 @@ Apart from `Migrate` command, there are `Rollback` and `Refresh` commands.
 		),
 		source,
 	)
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer closer()
+
+	migrated, err := m.Migrate(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	for i := range migrated {
+		fmt.Printf("\nMigrated SQL %s", migrated[i])
+	}
+}
+
 ```

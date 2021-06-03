@@ -1,19 +1,24 @@
 # TERN
 ## Another GO migrator
 
-## Version 1.*
+## Version 2.*
 
 ### Supported databases - MySQL, Sqlite
 Postgres is TODO, PRs are welcomed (with tests!!!)
 
 ## CLI Usage
-#### Initialize config file
+### Config file
+Tern-cli requires a yaml config file to work.
+
+#### Initialize
 ```bash
 tern-cli -init
 ```
-or
+that will create a `yaml` config file,
+you can specify config file name if you want but if you use a custom file name, you will
+have to specify it in `-cfg` argument on each command.
 ```bash
-tern-cli -init -cfg tern.yaml
+tern-cli -init -cfg ./mysql-tern.yaml
 ```
 
 #### Tern default config file
@@ -27,11 +32,12 @@ migrations:
 ```
 
 #### Create a new migration
+format will be chosen from the `version_format` key in `migrations` section in your config file
 ```bash
 tern-cli -create update_foo_table
 ```
 
-will create 2 files in your migration folder
+in case of `timestamp` format that command will create 2 files in your migration folder
 ```bash
 1602439886_update_foo_table.migrate.sql
 1602439886_update_foo_table.rollback.sql
@@ -41,7 +47,10 @@ will create 2 files in your migration folder
 ```bash
 tern-cli -migrate
 ```
-you can specify a number of steps (files) to execute and/or a timeout
+you can specify a number of steps (files) to execute
+or also specific versions (comma separated list) 
+and/or a timeout
+
 ```bash
 tern-cli -migrate -steps 2 -timeout 30
 ```
@@ -52,18 +61,25 @@ That will run the first 2 migrations, that had not been migrated before, and wil
 ```bash
 tern-cli -rollback
 ```
-you can specify a number of steps (files) to execute and/or a timeout
+you can specify a number of steps (files) to execute or specific versions (comma separated list) 
+and/or a timeout
 ```bash
 tern-cli -rollback -steps 2 -timeout 30
 ```
 That will rollback the latest 2 migrations, and will set timeout of 30s
+
+```bash
+tern-cli -rollback -versions 1596897167,1596897199
+```
+That will rollback only these 2 versions
 
 #### Refresh
 will rollback and then migrate again only those migrations that had been previously applied to the database
 ```bash
 tern-cli -refresh
 ```
-you can specify a number of steps (files) to rollback and then migrate again and/or a timeout
+you can specify a number of steps (files) to rollback or specific versions 
+(comma separated list) and then migrate again and/or timeout
 ```bash
 tern-cli -refresh -steps 2 -timeout 30
 ```

@@ -42,7 +42,7 @@ type LocalFileSource struct {
 	nameRegexp *regexp.Regexp
 }
 
-func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
+func (lfs *LocalFileSource) Create(dt, name string, withRollback bool, format migration.VersionFormat) (*migration.Migration, error) {
 	key := migration.CreateKeyFromVersionAndName(dt, name)
 	migrateFilename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
 	mf, err := os.Create(migrateFilename)
@@ -59,6 +59,7 @@ func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migrati
 		Name: name,
 		Version: migration.Version{
 			Value: dt,
+			Format: format,
 		},
 	}
 

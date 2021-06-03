@@ -47,6 +47,10 @@ func main() {
 		versions = strings.Split(*versionList, ",")
 	}
 
+	if *steps != 0 && len(versions) > 0 {
+		exitWithError(errors.New("choose between using steps and versions, you cannot have both"))
+	}
+
 	app, closer, err := cli.NewFromYaml(*configFile)
 	if err != nil {
 		exitWithError(err)

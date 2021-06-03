@@ -78,7 +78,7 @@ func (app *App) CreateMigration(
 		return nil, errors.Wrapf(ErrMigrationAlreadyExists, "dt [%s] name [%s]", v.Value, name)
 	}
 
-	return app.source.Create(v.Value, name, withRollback)
+	return app.source.Create(v.Value, name, withRollback, app.vf)
 }
 
 func (app *App) Migrate(ctx context.Context, steps int, versions []string) error {

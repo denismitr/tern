@@ -286,7 +286,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		}
 
 		keys, err := m.Migrate(ctx)
-		assert.True(t, errors.Is(err, database.ErrNothingToMigrate))
+		assert.True(t, errors.Is(err, ErrNothingToMigrateOrRollback))
 		assert.Len(t, keys, 0)
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
@@ -390,7 +390,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		keys, err := m.Migrate(ctx, WithKeys("1596897188_create_bar_table"))
+		keys, err := m.Migrate(ctx, WithVersions(migration.Version{Value: "1596897188"}))
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 

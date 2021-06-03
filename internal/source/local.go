@@ -143,7 +143,7 @@ func LocalFSParsingRules(vf migration.VersionFormat) (*regexp.Regexp, *regexp.Re
 }
 
 func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
-	keys, err := lfs.getAllKeysFromFolder(f.Keys)
+	keys, err := lfs.getAllVersionsFromFolder(f)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,13 @@ func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Mig
 	}
 }
 
-func (lfs *LocalFileSource) getAllKeysFromFolder(onlyKeys []string) (map[string]int, error) {
+func (lfs *LocalFileSource) getAllVersionsFromFolder(f Filter) (map[string]int, error) {
+	var onlyVersions []string
+
+	for _, v := range f.Versions {
+		onlyVersions = append(onlyVersions, v.Value)
+	}
+
 	files, err := ioutil.ReadDir(lfs.folder)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not read keys from folder %s", lfs.folder)
@@ -216,7 +222,7 @@ func (lfs *LocalFileSource) getAllKeysFromFolder(onlyKeys []string) (map[string]
 			return nil, errors.Wrapf(err, "file %s is not a valid migration name", files[i].Name()) // fixme
 		}
 
-		if len(onlyKeys) > 0 && !inStringSlice(key, onlyKeys) {
+		if len(onlyVersions) > 0 && !keyContainsOfVersions(key, onlyVersions) {
 			continue
 		}
 

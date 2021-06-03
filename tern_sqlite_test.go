@@ -2,7 +2,7 @@ package tern
 
 import (
 	"context"
-	database2 "github.com/denismitr/tern/v2/internal/database"
+	"github.com/denismitr/tern/v2/internal/database"
 	"github.com/denismitr/tern/v2/migration"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -213,7 +213,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		keys, err := m.Migrate(ctx)
-		assert.True(t, errors.Is(err, database2.ErrNothingToMigrate))
+		assert.True(t, errors.Is(err, ErrNothingToMigrateOrRollback))
 		assert.Len(t, keys, 0)
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
@@ -286,7 +286,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		assert.Len(t, tables, 2)
-		assert.Equal(t, []string{"foo", database2.DefaultMigrationsTable}, tables)
+		assert.Equal(t, []string{"foo", database.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
 		if executed, err := m.Rollback(ctx); err != nil {
@@ -316,7 +316,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		keys, err := m.Migrate(ctx, WithKeys("1596897188_create_bar_table"))
+		keys, err := m.Migrate(ctx, WithVersions(migration.Version{Value: "1596897188"}))
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 
@@ -335,7 +335,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 		}
 
 		assert.Len(t, tables, 2)
-		assert.Equal(t, []string{"bar", database2.DefaultMigrationsTable}, tables)
+		assert.Equal(t, []string{"bar", database.DefaultMigrationsTable}, tables)
 
 		// DO: execute down migrations to rollback all of them
 		if executed, err := m.Rollback(ctx); err != nil {

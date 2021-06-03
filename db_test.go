@@ -9,6 +9,8 @@ import (
 )
 
 func TestUseMySQL(t *testing.T) {
+	t.Parallel()
+
 	t.Run("default mysql options", func(t *testing.T) {
 		m := Migrator{}
 		checkerRuns := 0

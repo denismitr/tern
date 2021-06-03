@@ -46,7 +46,8 @@ const (
 	MaxVersionLen      = 14
 )
 
-var timestampRx = regexp.MustCompile(fmt.Sprintf("\\d{%d,%d}", MinTimestampLength, MaxTimestampLength))
+var timestampRx = regexp.MustCompile(fmt.Sprintf(`^\d{%d,%d}$`, MinTimestampLength, MaxTimestampLength))
+var datetimeRx = regexp.MustCompile(`^[12]\d{13}$`)
 
 func Timestamp(t string) VersionFactory {
 	return func() (Version, error) {
@@ -68,6 +69,10 @@ func Timestamp(t string) VersionFactory {
 func DateTime(year, month, day, hour, minute, second int) VersionFactory {
 	return func() (Version, error) {
 		var result Version
+
+		if year < 1900 || year > 2200 {
+			return result, errors.Wrapf(ErrInvalidVersionFormat, "year [%d] must be between 1900 and 2200", year)
+		}
 
 		y := strconv.Itoa(year)
 		if len(y) != 4 {
@@ -92,14 +97,26 @@ func DateTime(year, month, day, hour, minute, second int) VersionFactory {
 			d = "0" + d
 		}
 
+		if hour < 0 || hour > 23 {
+			return result, errors.Wrapf(ErrInvalidVersionFormat, "hour [%d] must be between 0 and 23", hour)
+		}
+
 		h := strconv.Itoa(hour)
 		if len(h) == 1 {
 			h = "0" + h
 		}
 
+		if minute < 0 || minute > 59 {
+			return result, errors.Wrapf(ErrInvalidVersionFormat, "minute [%d] must be between 0 and 59", minute)
+		}
+
 		min := strconv.Itoa(minute)
 		if len(min) == 1 {
 			min = "0" + min
+		}
+
+		if second < 0 || second > 59 {
+			return result, errors.Wrapf(ErrInvalidVersionFormat, "second [%d] must be between 0 and 59", second)
 		}
 
 		sec := strconv.Itoa(second)
@@ -318,4 +335,40 @@ func InVersions(version Version, versions []Version) bool {
 	}
 
 	return false
+}
+
+func VersionFromString(s string) (Version, error) {
+	isDatetime := datetimeRx.MatchString(s)
+	if isDatetime {
+		return Version{
+			Value: s,
+			Format: DatetimeFormat,
+		}, nil
+	}
+
+	isTimestamp := timestampRx.MatchString(s)
+	if isTimestamp {
+		return Version{
+			Value: s,
+			Format: TimestampFormat,
+		}, nil
+	}
+
+	if isPositiveInt(s) {
+		return Version{
+			Value: s,
+			Format: NumberFormat,
+		}, nil
+	}
+
+	return Version{}, errors.Wrapf(ErrInvalidVersionFormat, "input: %s", s)
+}
+
+func isPositiveInt(s string) bool {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return false
+	}
+
+	return n >= 0
 }

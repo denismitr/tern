@@ -10,54 +10,9 @@ import (
 	"time"
 )
 
-func Test_MigrationCanAssembleScriptsInOne(t *testing.T) {
+func Test_MigrationsCanBeSortedByVersion(t *testing.T) {
 	t.Parallel()
 
-	tt := []struct{
-	    name string
-	    migrate []string
-	    migrateScripts string
-	    rollback []string
-	    rollbackScripts string
-	}{
-	    {
-	        name: "single scripts with no trailing semicolon",
-	        migrate: []string{"CREATE foo"},
-	        migrateScripts: "CREATE foo;",
-	        rollback: []string{"DROP foo"},
-	        rollbackScripts: "DROP foo;",
-	    },
-		{
-			name: "two scripts with one with trailing semicolon",
-			migrate: []string{"CREATE TABLE foo;", "INSERT INTO foo (name) VALUES (?)"},
-			migrateScripts: "CREATE TABLE foo;\nINSERT INTO foo (name) VALUES (?);",
-			rollback: []string{"DROP TABLE foo"},
-			rollbackScripts: "DROP TABLE foo;",
-		},
-		{
-			name: "three scripts with no trailing semicolons",
-			migrate: []string{"CREATE TABLE foo", "INSERT INTO foo (name) VALUES (?)", "CREATE TABLE IF NOT EXISTS baz"},
-			migrateScripts: "CREATE TABLE foo;\nINSERT INTO foo (name) VALUES (?);\nCREATE TABLE IF NOT EXISTS baz;",
-			rollback: []string{"DELETE FROM foo where 1", "DROP TABLE foo", "DROP TABLE baz"},
-			rollbackScripts: "DELETE FROM foo where 1;\nDROP TABLE foo;\nDROP TABLE baz;",
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-	    t.Run(tc.name, func(t *testing.T) {
-			m := Migration{
-				Migrate:  tc.migrate,
-				Rollback: tc.rollback,
-			}
-
-			assert.Equal(t, tc.migrateScripts, m.MigrateScripts())
-			assert.Equal(t, tc.rollbackScripts, m.RollbackScripts())
-	    })
-	}
-}
-
-func Test_MigrationsCanBeSortedByVersion(t *testing.T) {
 	m1 := &Migration{
 		Version:  Version{Value: "1596897167"},
 		Name:     "Foo migration",
@@ -216,6 +171,15 @@ func TestDateTimeVersion(t *testing.T) {
 			second: 59,
 			exp: "20190130100559",
 		},
+		{
+			year: 2021,
+			month: 12,
+			day: 31,
+			hour: 0,
+			minute: 0,
+			second: 1,
+			exp: "20211231000001",
+		},
 	}
 
 	for _, tc := range validInputs {
@@ -225,6 +189,56 @@ func TestDateTimeVersion(t *testing.T) {
 			assert.Equal(t, tc.exp, result.Value)
 			assert.Equal(t, DatetimeFormat, result.Format)
 			assert.True(t, result.MigratedAt.IsZero())
+		})
+	}
+
+	invalidInputs := []struct{
+		year int
+		month int
+		day int
+		hour int
+		minute int
+		second int
+	}{
+		{
+			year: 19,
+			month: 1,
+			day: 30,
+			hour: 10,
+			minute: 5,
+			second: 59,
+		},
+		{
+			year: 19564,
+			month: 1,
+			day: 30,
+			hour: 10,
+			minute: 5,
+			second: 59,
+		},
+		{
+			year: 1956,
+			month: -1,
+			day: 30,
+			hour: 10,
+			minute: 5,
+			second: 59,
+		},
+		{
+			year: 1956,
+			month: 1,
+			day: 30,
+			hour: 10,
+			minute: 5,
+			second: -19,
+		},
+	}
+
+	for _, tc := range invalidInputs {
+		t.Run(fmt.Sprintf("%d-%d-%d-%d-%d-%d", tc.year, tc.month, tc.day, tc.hour, tc.minute, tc.second), func(t *testing.T) {
+			_, err := DateTime(tc.year, tc.month, tc.day, tc.hour, tc.minute, tc.second)()
+			require.Error(t, err)
+			assert.True(t, errors.Is(err, ErrInvalidVersionFormat))
 		})
 	}
 }
@@ -268,6 +282,8 @@ func TestNumberFormat(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
+	t.Parallel()
+
 	t.Run("from number", func(t *testing.T) {
 		f := New(Number(1), "foo", []string{"SELECT 1"}, []string{})
 		m, err := f()
@@ -279,4 +295,47 @@ func TestNew(t *testing.T) {
 		assert.Equal(t, NumberFormat, m.Version.Format)
 	})
 
+	t.Run("from datetime", func(t *testing.T) {
+		f := New(DateTime(2021, 10, 30, 1, 10, 9), "foo", []string{"SELECT 1"}, []string{})
+		m, err := f()
+
+		require.NoError(t, err)
+		assert.Equal(t, "foo", m.Name)
+		assert.Equal(t, "20211030011009_foo", m.Key)
+		assert.Equal(t, "20211030011009", m.Version.Value)
+		assert.Equal(t, DatetimeFormat, m.Version.Format)
+	})
+
+	t.Run("from timestamp", func(t *testing.T) {
+		f := New(Timestamp("15464494912"), "foo", []string{"SELECT 1"}, []string{})
+		m, err := f()
+
+		require.NoError(t, err)
+		assert.Equal(t, "foo", m.Name)
+		assert.Equal(t, "15464494912_foo", m.Key)
+		assert.Equal(t, "15464494912", m.Version.Value)
+		assert.Equal(t, TimestampFormat, m.Version.Format)
+	})
+}
+
+func TestVersionFromString(t *testing.T) {
+	t.Parallel()
+
+	validInputs := []struct{
+		in string
+		format VersionFormat
+	}{
+		{in: "15464494912", format: TimestampFormat},
+		{in: "00000000000001", format: NumberFormat},
+		{in: "20190130100559", format: DatetimeFormat},
+	}
+
+	for _, tc := range validInputs {
+		t.Run(tc.in, func(t *testing.T) {
+			v, err := VersionFromString(tc.in)
+			require.NoError(t, err)
+			assert.Equal(t, v.Value, tc.in)
+			assert.Equal(t, tc.format, v.Format)
+		})
+	}
 }

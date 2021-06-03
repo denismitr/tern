@@ -59,6 +59,7 @@ tern-cli -rollback -steps 2 -timeout 30
 That will rollback the latest 2 migrations, and will set timeout of 30s
 
 #### Refresh
+will rollback and then migrate again only those migrations that had been previously applied to the database
 ```bash
 tern-cli -refresh
 ```
@@ -93,6 +94,9 @@ m, closer, err := tern.NewMigrator(
 // 1597897177_create_baz_table.rollback.sql
 
 if err != nil {
+	if errors.Is(err, tern.ErrNothingToMigrateOrRollback) {
+		os.Exit(0)
+    }   
     panic(err)
 }
 
@@ -103,6 +107,9 @@ defer cancel()
 
 migrated, err := m.Migrate(ctx); 
 if err != nil {
+    if errors.Is(err, tern.ErrNothingToMigrateOrRollback) {
+        os.Exit(0)
+    }
     panic(err)
 }
 
@@ -120,9 +127,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"github.com/denismitr/tern/v2"
 	"github.com/denismitr/tern/v2/migration"
 	"database/sql"
+	"github.com/pkg/errors"
 )
 
 func main() {
@@ -163,6 +172,9 @@ func main() {
 
 	migrated, err := m.Migrate(context.Background())
 	if err != nil {
+		if errors.Is(err, tern.ErrNothingToMigrateOrRollback) {
+			os.Exit(0)
+		}
 		panic(err)
 	}
 

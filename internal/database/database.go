@@ -7,10 +7,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrUnsupportedDBDriver = errors.New("unknown DB driver")
-var ErrNothingToMigrate = errors.New("nothing to migrate")
-var ErrNothingToRollback = errors.New("nothing to rollback")
-var ErrNothingToMigrateOrRollback = errors.New("nothing to migrate or rollback")
+var ErrMigrationsTableIsEmpty = errors.New("migrations table is empty")
+var ErrNoChangesRequired = errors.New("no changes to the database required")
 var ErrMigrationVersionNotSpecified = errors.New("migration version not specified")
 
 var MigratedAtColumn = "migrated_at"
@@ -30,6 +28,7 @@ type CommonOptions struct {
 
 type Plan struct {
 	Steps int
+	Versions []migration.Version
 }
 
 type versionController interface {
@@ -51,3 +50,71 @@ type Gateway interface {
 }
 
 type ConnCloser func() error
+
+func ScheduleForRollback(
+	migrations migration.Migrations,
+	migratedVersions []migration.Version,
+	p Plan,
+) migration.Migrations {
+	var scheduled migration.Migrations
+
+	for i := len(migrations) - 1; i >= 0; i-- {
+		if len(p.Versions) > 0 && ! migration.InVersions(migrations[i].Version, p.Versions) {
+			continue
+		}
+
+		if migration.InVersions(migrations[i].Version, migratedVersions) {
+			if p.Steps != 0 && len(scheduled) >= p.Steps {
+				break
+			}
+
+			scheduled = append(scheduled, migrations[i])
+		}
+	}
+
+	return scheduled
+}
+
+func ScheduleForMigration(
+	migrations migration.Migrations,
+	migratedVersions []migration.Version,
+	p Plan,
+) migration.Migrations {
+	var scheduled migration.Migrations
+
+	for i := range migrations {
+		if !migration.InVersions(migrations[i].Version, migratedVersions) {
+			if p.Steps != 0 && len(scheduled) >= p.Steps {
+				break
+			}
+
+			if len(p.Versions) == 0 || migration.InVersions(migrations[i].Version, p.Versions) {
+				scheduled = append(scheduled, migrations[i])
+			}
+		}
+	}
+
+	return scheduled
+}
+
+func ScheduleForRefresh(
+	migrations migration.Migrations,
+	migratedVersions []migration.Version,
+	p Plan,
+) migration.Migrations {
+	var scheduled migration.Migrations
+	for i := len(migrations) - 1; i >= 0; i-- {
+		if len(p.Versions) > 0 && ! migration.InVersions(migrations[i].Version, p.Versions) {
+			continue
+		}
+
+		if migration.InVersions(migrations[i].Version, migratedVersions) {
+			if p.Steps != 0 && len(scheduled) >= p.Steps {
+				break
+			}
+
+			scheduled = append(scheduled, migrations[i])
+		}
+	}
+	return scheduled
+}

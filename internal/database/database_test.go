@@ -1,48 +1,190 @@
 package database
 
 import (
-	"context"
-	"database/sql"
+	"github.com/denismitr/tern/v2/migration"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"testing"
 )
 
-type ctxExecutorMock struct {
-	calls      int
-	queries    []string
-	args       map[string][]interface{}
-	migrateErr error
-	versionErr error
-}
+func TestSchedule(t *testing.T) {
+	t.Parallel()
 
-func newCtxExecutorMock() *ctxExecutorMock {
-	return &ctxExecutorMock{
-		args: make(map[string][]interface{}),
-	}
-}
+	vf1 := migration.Timestamp("1596897167")
+	mf1 := migration.New(
+		vf1,
+		"Create foo table",
+		[]string{"CREATE TABLE IF NOT EXISTS foo (id binary(16) PRIMARY KEY);"},
+		[]string{"DROP TABLE IF EXISTS foo;"},
+	)
 
-func newCtxExecutorMockWithErrors(migrateErr, versionErr error) *ctxExecutorMock {
-	return &ctxExecutorMock{
-		args:       make(map[string][]interface{}),
-		migrateErr: migrateErr,
-		versionErr: versionErr,
-	}
-}
+	vf2 := migration.Timestamp("1596899255")
+	mf2 := migration.New(
+		vf2,
+		"Create bar table",
+		[]string{"CREATE TABLE IF NOT EXISTS bar (uid binary(16) PRIMARY KEY);"},
+		[]string{"DROP TABLE IF EXISTS bar;"},
+	)
 
-func (ex *ctxExecutorMock) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	ex.calls++
-	ex.queries = append(ex.queries, query)
-	ex.args[query] = args
+	vf3 := migration.Timestamp("1596899399")
+	mf3 := migration.New(
+		vf3,
+		"Create baz table",
+		[]string{"CREATE TABLE IF NOT EXISTS baz (uid binary(16) PRIMARY KEY);"},
+		[]string{"DROP TABLE IF EXISTS baz;"},
+	)
 
-	if ex.migrateErr != nil && ex.calls == 1 {
-		return nil, ex.migrateErr
-	}
+	m1, err := mf1()
+	require.NoError(t, err)
 
-	if ex.versionErr != nil && ex.calls == 2 {
-		return nil, ex.versionErr
-	}
+	m2, err := mf2()
+	require.NoError(t, err)
 
-	return nil, nil
+	m3, err := mf3()
+	require.NoError(t, err)
+
+	v1, err := vf1()
+	require.NoError(t, err)
+
+	v2, err := vf2()
+	require.NoError(t, err)
+
+	v3, err := vf3()
+	require.NoError(t, err)
+
+	t.Run("it will schedule only 1 migration for rollback if steps are limited to one", func(t *testing.T) {
+		scheduled := ScheduleForRollback(migration.Migrations{m1, m2, m3}, []migration.Version{v1, v2, v3}, Plan{Steps: 1})
+		require.Len(t, scheduled, 1)
+		assert.Equal(t, v3.Value, scheduled[0].Version.Value)
+		assert.Equal(t, "Create baz table", scheduled[0].Name)
+	})
+
+	t.Run("it will schedule 1 specific migration for rollback if steps are limited to one and versions in plan", func(t *testing.T) {
+		scheduled := ScheduleForRollback(
+			migration.Migrations{m1, m2, m3},
+			[]migration.Version{v1, v2, v3},
+			Plan{Steps: 1, Versions: []migration.Version{v2}},
+		)
+		require.Len(t, scheduled, 1)
+		assert.Equal(t, v2.Value, scheduled[0].Version.Value)
+		assert.Equal(t, "Create bar table", scheduled[0].Name)
+	})
+
+	t.Run("it will schedule all migrations for rollback if specific plan not specified", func(t *testing.T) {
+		scheduled := ScheduleForRollback(migration.Migrations{m1, m2, m3}, []migration.Version{v1, v2, v3}, Plan{})
+		require.Len(t, scheduled, 3)
+
+		assert.Equal(t, v3.Value, scheduled[0].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[0].Version.Format)
+		assert.Equal(t, "Create baz table", scheduled[0].Name)
+
+		assert.Equal(t, v2.Value, scheduled[1].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[1].Version.Format)
+		assert.Equal(t, "Create bar table", scheduled[1].Name)
+
+		assert.Equal(t, v1.Value, scheduled[2].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[2].Version.Format)
+		assert.Equal(t, "Create foo table", scheduled[2].Name)
+	})
+
+	t.Run("it will schedule everything for migration if nothing was migrated", func(t *testing.T) {
+		scheduled := ScheduleForMigration(migration.Migrations{m1, m2, m3}, []migration.Version{}, Plan{})
+		require.Len(t, scheduled, 3)
+
+		assert.Equal(t, v3.Value, scheduled[2].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[2].Version.Format)
+		assert.Equal(t, "Create baz table", scheduled[2].Name)
+
+		assert.Equal(t, v2.Value, scheduled[1].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[1].Version.Format)
+		assert.Equal(t, "Create bar table", scheduled[1].Name)
+
+		assert.Equal(t, v1.Value, scheduled[0].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[0].Version.Format)
+		assert.Equal(t, "Create foo table", scheduled[0].Name)
+	})
+
+	t.Run("it will schedule only 2 migrations for migration if plan steps are limited to 2", func(t *testing.T) {
+		scheduled := ScheduleForMigration(migration.Migrations{m1, m2, m3}, []migration.Version{}, Plan{Steps: 2})
+		require.Len(t, scheduled, 2)
+
+		assert.Equal(t, v2.Value, scheduled[1].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[1].Version.Format)
+		assert.Equal(t, "Create bar table", scheduled[1].Name)
+
+		assert.Equal(t, v1.Value, scheduled[0].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[0].Version.Format)
+		assert.Equal(t, "Create foo table", scheduled[0].Name)
+	})
+
+	t.Run("it will schedule only 2 migrations for migration if 2 are specified in plan versions", func(t *testing.T) {
+		scheduled := ScheduleForMigration(
+			migration.Migrations{m1, m2, m3},
+			[]migration.Version{},
+			Plan{Versions: []migration.Version{v1, v3}},
+		)
+
+		require.Len(t, scheduled, 2)
+
+		assert.Equal(t, v1.Value, scheduled[0].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[0].Version.Format)
+		assert.Equal(t, "Create foo table", scheduled[0].Name)
+
+		assert.Equal(t, v3.Value, scheduled[1].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[1].Version.Format)
+		assert.Equal(t, "Create baz table", scheduled[1].Name)
+	})
+
+	t.Run("it will schedule only 1 migration for migration if 2 are specified in plan versions and 1 in steps", func(t *testing.T) {
+		scheduled := ScheduleForMigration(
+			migration.Migrations{m1, m2, m3},
+			[]migration.Version{},
+			Plan{Versions: []migration.Version{v1, v3}, Steps: 1},
+		)
+
+		require.Len(t, scheduled, 1)
+
+		assert.Equal(t, v1.Value, scheduled[0].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[0].Version.Format)
+		assert.Equal(t, "Create foo table", scheduled[0].Name)
+	})
+
+	t.Run("it will schedule only 1 migration for refresh if steps are limited to one", func(t *testing.T) {
+		scheduled := ScheduleForRefresh(migration.Migrations{m1, m2, m3}, []migration.Version{v1, v2, v3}, Plan{Steps: 1})
+		require.Len(t, scheduled, 1)
+		assert.Equal(t, v3.Value, scheduled[0].Version.Value)
+		assert.Equal(t, "Create baz table", scheduled[0].Name)
+	})
+
+	t.Run("it will schedule 1 specific migration for refresh if steps are limited to one and versions in plan", func(t *testing.T) {
+		scheduled := ScheduleForRefresh(
+			migration.Migrations{m1, m2, m3},
+			[]migration.Version{v1, v2, v3},
+			Plan{Steps: 1, Versions: []migration.Version{v2}},
+		)
+		require.Len(t, scheduled, 1)
+		assert.Equal(t, v2.Value, scheduled[0].Version.Value)
+		assert.Equal(t, "Create bar table", scheduled[0].Name)
+	})
+
+	t.Run("it will schedule all migrations for refresh if specific plan not specified", func(t *testing.T) {
+		scheduled := ScheduleForRefresh(migration.Migrations{m1, m2, m3}, []migration.Version{v1, v2, v3}, Plan{})
+		require.Len(t, scheduled, 3)
+
+		assert.Equal(t, v3.Value, scheduled[0].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[0].Version.Format)
+		assert.Equal(t, "Create baz table", scheduled[0].Name)
+
+		assert.Equal(t, v2.Value, scheduled[1].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[1].Version.Format)
+		assert.Equal(t, "Create bar table", scheduled[1].Name)
+
+		assert.Equal(t, v1.Value, scheduled[2].Version.Value)
+		assert.Equal(t, migration.TimestampFormat, scheduled[2].Version.Format)
+		assert.Equal(t, "Create foo table", scheduled[2].Name)
+	})
 }
 
 //func Test_MigrateAndRollback_Funcs(t *testing.T) {
@@ -68,11 +210,11 @@ func (ex *ctxExecutorMock) ExecContext(ctx context.Context, query string, args .
 //		}
 //
 //		assert.Equal(t, 2, ex.calls)
-//		assert.Len(t, ex.queries, 2)
+//		require.Len(t, ex.queries, 2)
 //		assert.Equal(t, m.Migrate[0], ex.queries[0])
 //		assert.Equal(t, versionInsertionQuery, ex.queries[1])
 //
-//		assert.Len(t, ex.args, 2)
+//		require.Len(t, ex.args, 2)
 //		assert.Equal(t, []interface{}(nil), ex.args[m.Migrate[0]])
 //		assert.Equal(t, []interface{}{"1596897167", "Create foo table"}, ex.args[versionInsertionQuery])
 //	})
@@ -131,11 +273,11 @@ func (ex *ctxExecutorMock) ExecContext(ctx context.Context, query string, args .
 //		}
 //
 //		assert.Equal(t, 2, ex.calls)
-//		assert.Len(t, ex.queries, 2)
+//		require.Len(t, ex.queries, 2)
 //		assert.Equal(t, m.Rollback[0], ex.queries[0])
 //		assert.Equal(t, versionDeletionQuery, ex.queries[1])
 //
-//		assert.Len(t, ex.args, 2)
+//		require.Len(t, ex.args, 2)
 //		assert.Equal(t, []interface{}(nil), ex.args[m.Rollback[0]])
 //		assert.Equal(t, []interface{}{"1596897167"}, ex.args[versionDeletionQuery])
 //	})

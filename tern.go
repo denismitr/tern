@@ -3,7 +3,6 @@ package tern
 import (
 	"context"
 	"github.com/denismitr/tern/v2/internal/database"
-	"github.com/denismitr/tern/v2/internal/database/sqlgateway"
 	"github.com/denismitr/tern/v2/internal/logger"
 	"github.com/denismitr/tern/v2/internal/source"
 	"github.com/denismitr/tern/v2/migration"
@@ -11,18 +10,14 @@ import (
 )
 
 var ErrGatewayNotInitialized = errors.New("database gateway has not been initialized")
+var ErrNothingToMigrateOrRollback = errors.New("nothing to migrate or rollback")
 
 type CloserFunc func() error
-
-var ErrNothingToMigrate = errors.New("nothing to migrate")
-var ErrNothingToRollback = errors.New("nothing to rollback")
-var ErrNothingToMigrateOrRollback = errors.New("nothing to migrate or rollback")
 
 type Migrator struct {
 	lg             logger.Logger
 	gateway        database.Gateway
 	selector       source.Selector
-	connectOptions *sqlgateway.ConnectOptions
 	closerFns      []CloserFunc
 }
 
@@ -73,29 +68,29 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 	return m, closer, nil
 }
 
-// Migrate the migrations using action configurator callbacks to customize
+// Migrate the migrations using Action configurator callbacks to customize
 // the process of migration
 func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]string, error) {
-	act := new(action)
+	act := new(Action)
 	for _, f := range cfs {
 		f(act)
 	}
 
-	migrations, err := m.selector.Select(ctx, source.Filter{Keys: act.keys})
+	migrations, err := m.selector.Select(ctx, source.Filter{Versions: act.versions})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, err
 	}
 
-	if err := m.gateway.Connect(); err != nil {
-		return nil, err
+	if connErr := m.gateway.Connect(); connErr != nil {
+		return nil, connErr
 	}
 
 	p := database.Plan{Steps: act.steps}
 	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
-		if !errors.Is(err, database.ErrNothingToMigrate) {
-			return nil, ErrNothingToMigrate
+		if errors.Is(err, database.ErrNoChangesRequired) {
+			return nil, ErrNothingToMigrateOrRollback
 		}
 
 		m.lg.Error(err)
@@ -106,28 +101,28 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 	return migrated.Keys(), nil
 }
 
-// Rollback the migrations using action configurator callbacks
+// Rollback the migrations using Action configurator callbacks
 // to customize the rollback process
 func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (migration.Migrations, error) {
-	act := new(action)
+	act := new(Action)
 	for _, f := range cfs {
 		f(act)
 	}
 
-	migrations, err := m.selector.Select(ctx, source.Filter{Keys: act.keys})
+	migrations, err := m.selector.Select(ctx, source.Filter{Versions: act.versions})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, errors.Wrap(err, "could not rollback migrations")
 	}
 
-	if err := m.gateway.Connect(); err != nil {
-		return nil, err
+	if connErr := m.gateway.Connect(); connErr != nil {
+		return nil, connErr
 	}
 
-	executed, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps})
+	executed, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps, Versions: act.versions})
 	if err != nil {
-		if errors.Is(err, database.ErrNothingToRollback) {
-			return nil, ErrNothingToRollback
+		if errors.Is(err, database.ErrNoChangesRequired) {
+			return nil, ErrNothingToMigrateOrRollback
 		}
 
 		m.lg.Error(err)
@@ -138,26 +133,26 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 }
 
 // Refresh first rollbacks the migrations and then migrates them again
-// uses the action configurator callbacks to customize the process
+// uses the Action configurator callbacks to customize the process
 func (m *Migrator) Refresh(ctx context.Context, cfs ...ActionConfigurator) (migration.Migrations, migration.Migrations, error) {
-	act := new(action)
+	act := new(Action)
 	for _, f := range cfs {
 		f(act)
 	}
 
-	migrations, err := m.selector.Select(ctx, source.Filter{Keys: act.keys})
+	migrations, err := m.selector.Select(ctx, source.Filter{Versions: act.versions})
 	if err != nil {
 		m.lg.Error(err)
 		return nil, nil, err
 	}
 
-	if err := m.gateway.Connect(); err != nil {
-		return nil, nil, err
+	if connErr := m.gateway.Connect(); connErr != nil {
+		return nil, nil, connErr
 	}
 
-	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{Steps: act.steps})
+	rolledBack, migrated, err := m.gateway.Refresh(ctx, migrations, database.Plan{Steps: act.steps, Versions: act.versions})
 	if err != nil {
-		if errors.Is(err, database.ErrNothingToMigrateOrRollback) {
+		if errors.Is(err, database.ErrNoChangesRequired) {
 			return nil, nil, ErrNothingToMigrateOrRollback
 		}
 

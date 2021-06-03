@@ -102,19 +102,10 @@ func (g *SQLGateway) Migrate(ctx context.Context, migrations migration.Migration
 	var migrated migration.Migrations
 
 	if err := g.execUnderLock(ctx, database.OperationMigrate, func(tx *sql.Tx, migratedVersions []migration.Version) error {
-		var scheduled migration.Migrations
-		for i := range migrations {
-			if !migration.InVersions(migrations[i].Version, migratedVersions) {
-				if p.Steps != 0 && len(scheduled) >= p.Steps {
-					break
-				}
-
-				scheduled = append(scheduled, migrations[i])
-			}
-		}
+		scheduled := database.ScheduleForMigration(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
-			return database.ErrNothingToMigrate
+			return database.ErrNoChangesRequired
 		}
 
 		for i := range scheduled {
@@ -139,19 +130,10 @@ func (g *SQLGateway) Rollback(ctx context.Context, migrations migration.Migratio
 	var executed migration.Migrations
 
 	if err := g.execUnderLock(ctx, database.OperationRollback, func(tx *sql.Tx, migratedVersions []migration.Version) error {
-		var scheduled migration.Migrations
-		for i := len(migrations) - 1; i >= 0; i-- {
-			if migration.InVersions(migrations[i].Version, migratedVersions) {
-				if p.Steps != 0 && len(scheduled) >= p.Steps {
-					break
-				}
-
-				scheduled = append(scheduled, migrations[i])
-			}
-		}
+		scheduled := database.ScheduleForRollback(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
-			return database.ErrNothingToMigrate
+			return database.ErrNoChangesRequired
 		}
 
 		for i := range scheduled {
@@ -181,20 +163,11 @@ func (g *SQLGateway) Refresh(
 	var rolledBack migration.Migrations
 	var migrated migration.Migrations
 
-	if err := g.execUnderLock(ctx, database.OperationRefresh, func(tx *sql.Tx, versions []migration.Version) error {
-		var scheduled migration.Migrations
-		for i := len(migrations) - 1; i >= 0; i-- {
-			if migration.InVersions(migrations[i].Version, versions) {
-				if p.Steps != 0 && len(scheduled) >= p.Steps {
-					break
-				}
-
-				scheduled = append(scheduled, migrations[i])
-			}
-		}
+	if err := g.execUnderLock(ctx, database.OperationRefresh, func(tx *sql.Tx, migratedVersions []migration.Version) error {
+		scheduled := database.ScheduleForRefresh(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
-			return database.ErrNothingToMigrate
+			return database.ErrNoChangesRequired
 		}
 
 		for i := range scheduled {
@@ -208,11 +181,13 @@ func (g *SQLGateway) Refresh(
 		}
 
 		for i := len(scheduled) - 1; i >= 0; i-- {
+			g.lg.Debugf("migrating: %s", scheduled[i].Key)
 			if err := g.migrateOne(ctx, tx, scheduled[i]); err != nil {
 				return err
 			}
 
 			migrated = append(migrated, scheduled[i])
+			g.lg.Debugf("migrated: %s", scheduled[i].Key)
 		}
 
 		return nil
@@ -358,10 +333,18 @@ func (g *SQLGateway) execUnderLock(ctx context.Context, operation string, f func
 
 	availableVersions, err := g.readVersionsUnderTx(tx, readVersionsFilter{Sort: ASC})
 	if err != nil {
+		if errors.Is(err, database.ErrNoChangesRequired) {
+			return handleError(err, tx)
+		}
+
 		return handleError(errors.Wrapf(err, "operation [%s] failed", operation), tx)
 	}
 
 	if err := f(tx, availableVersions); err != nil {
+		if errors.Is(err, database.ErrNoChangesRequired) {
+			return handleError(err, tx)
+		}
+
 		return handleError(errors.Wrapf(err, "operation [%s] failed", operation), tx)
 	}
 
@@ -372,22 +355,25 @@ func (g *SQLGateway) execUnderLock(ctx context.Context, operation string, f func
 	return g.locker.Unlock(ctx, g.conn)
 }
 
-func (g *SQLGateway) migrateOne(ctx context.Context, tx ctxExecutor, m *migration.Migration) error {
+func (g *SQLGateway) migrateOne(ctx context.Context, ex ctxExecutor, m *migration.Migration) error {
 	if m.Version.Value == "" {
 		return database.ErrMigrationVersionNotSpecified
 	}
 
 	insertQuery, args := g.schema.insertQuery(m)
 
-	g.lg.SQL(m.MigrateScripts())
-
-	if _, err := tx.ExecContext(ctx, m.MigrateScripts()); err != nil {
-		return errors.Wrapf(err, "could not run migration [%s]", m.Key)
+	if len(m.Migrate) > 0 {
+		for _, script := range m.Migrate {
+			g.lg.SQL(script)
+			if _, err := ex.ExecContext(ctx, script); err != nil {
+				return errors.Wrapf(err, "could not migrate script [%s], migration [%s]", script, m.Key)
+			}
+		}
 	}
 
 	g.lg.SQL(insertQuery, m.Version.Value, m.Name)
 
-	if _, err := tx.ExecContext(ctx, insertQuery, args...); err != nil {
+	if _, err := ex.ExecContext(ctx, insertQuery, args...); err != nil {
 		return errors.Wrapf(
 			err,
 			"could not insert migration version [%s]",
@@ -405,11 +391,12 @@ func (g *SQLGateway) rollbackOne(ctx context.Context, ex ctxExecutor, m *migrati
 
 	removeVersionQuery, args := g.schema.removeQuery(m)
 
-	if m.RollbackScripts() != "" {
-		g.lg.SQL(m.RollbackScripts())
-
-		if _, err := ex.ExecContext(ctx, m.RollbackScripts()); err != nil {
-			return errors.Wrapf(err, "could not rollback migration [%s]", m.Key)
+	if len(m.Rollback) > 0 {
+		for _, script := range m.Rollback {
+			g.lg.SQL(script)
+			if _, err := ex.ExecContext(ctx, script); err != nil {
+				return errors.Wrapf(err, "could not rollback script [%s], migration [%s]", script, m.Key)
+			}
 		}
 	}
 

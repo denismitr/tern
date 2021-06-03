@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/denismitr/tern/v2/migration"
 	"github.com/pkg/errors"
+	"strings"
 	"unicode"
 )
 
@@ -12,7 +13,7 @@ var ErrNotAMigrationFile = errors.New("not a migration file")
 var ErrTooManyFilesForKey = errors.New("too many files for single mysqlDefaultLockKey")
 
 type Filter struct {
-	Keys  []string
+	Versions []migration.Version
 }
 
 type Selector interface {
@@ -43,15 +44,21 @@ func ucFirst(s string) string {
 	return f + string(r[1:])
 }
 
-func inStringSlice(key string, keys []string) bool {
-	if keys == nil {
+func keyContainsOfVersions(key string, versions []string) bool {
+	if versions == nil {
 		return false
 	}
 
-	for i := range keys {
-		if keys[i] == key {
+	segments := strings.Split(key, "_")
+	if len(segments) < 2 {
+		return false
+	}
+
+	for i := range versions {
+		if segments[0] == versions[i] {
 			return true
 		}
 	}
+
 	return false
 }

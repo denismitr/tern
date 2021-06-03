@@ -8,7 +8,7 @@ import (
 )
 
 type (
-	MySQLOptionFunc func(*sqlgateway.MySQLOptions, *sqlgateway.ConnectOptions)
+	MySQLOptionFunc  func(*sqlgateway.MySQLOptions, *sqlgateway.ConnectOptions)
 	SqliteOptionFunc func(*sqlgateway.SqliteOptions, *sqlgateway.ConnectOptions)
 )
 
@@ -18,8 +18,8 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 			LockFor: sqlgateway.MysqlDefaultLockSeconds,
 			LockKey: sqlgateway.MysqlDefaultLockKey,
 			CommonOptions: database.CommonOptions{
-				MigrationsTable:   database.DefaultMigrationsTable,
-				MigratedAtColumn:  database.MigratedAtColumn,
+				MigrationsTable:  database.DefaultMigrationsTable,
+				MigratedAtColumn: database.MigratedAtColumn,
 			},
 		}
 
@@ -43,7 +43,7 @@ func UseSqlite(db *sql.DB, options ...SqliteOptionFunc) OptionFunc {
 	return func(m *Migrator) error {
 		sqliteOpts := &sqlgateway.SqliteOptions{
 			CommonOptions: database.CommonOptions{
-				MigrationsTable:   database.DefaultMigrationsTable,
+				MigrationsTable:  database.DefaultMigrationsTable,
 				MigratedAtColumn: database.MigratedAtColumn,
 			},
 		}
@@ -127,22 +127,5 @@ func WithMySQLConnectionTimeout(timeout time.Duration) MySQLOptionFunc {
 func WithMySQLMaxConnectionAttempts(attempts int) MySQLOptionFunc {
 	return func(mysqlOpts *sqlgateway.MySQLOptions, connectOpts *sqlgateway.ConnectOptions) {
 		connectOpts.MaxAttempts = attempts
-	}
-}
-
-type action struct {
-	steps int
-	keys  []string
-}
-
-func WithSteps(steps int) ActionConfigurator {
-	return func(a *action) {
-		a.steps = steps
-	}
-}
-
-func WithKeys(keys ...string) ActionConfigurator {
-	return func(a *action) {
-		a.keys = keys
 	}
 }

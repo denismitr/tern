@@ -28,12 +28,6 @@ type (
 		VersionFormat    migration.VersionFormat
 	}
 
-	ActionConfig struct {
-		Steps   int
-		Key     string
-		Version string
-	}
-
 	App struct {
 		source   source.Source
 		migrator *tern.Migrator
@@ -87,40 +81,40 @@ func (app *App) CreateMigration(
 	return app.source.Create(v.Value, name, withRollback)
 }
 
-func (app *App) Migrate(ctx context.Context, cfg ActionConfig) error {
-	var configurators []tern.ActionConfigurator
-	if cfg.Steps > 0 {
-		configurators = append(configurators, tern.WithSteps(cfg.Steps))
+func (app *App) Migrate(ctx context.Context, steps int, versions []string) error {
+	configurators, err := tern.CreateConfigurators(steps, versions)
+	if err != nil {
+		return err
 	}
 
-	if _, err := app.migrator.Migrate(ctx, configurators...); err != nil {
-		return err
+	if _, migrateErr := app.migrator.Migrate(ctx, configurators...); migrateErr != nil {
+		return migrateErr
 	}
 
 	return nil
 }
 
-func (app *App) Rollback(ctx context.Context, cfg ActionConfig) error {
-	var configurators []tern.ActionConfigurator
-	if cfg.Steps > 0 {
-		configurators = append(configurators, tern.WithSteps(cfg.Steps))
+func (app *App) Rollback(ctx context.Context, steps int, versions []string) error {
+	configurators, err := tern.CreateConfigurators(steps, versions)
+	if err != nil {
+		return err
 	}
 
-	if _, err := app.migrator.Rollback(ctx, configurators...); err != nil {
-		return err
+	if _, rollbackErr := app.migrator.Rollback(ctx, configurators...); rollbackErr != nil {
+		return rollbackErr
 	}
 
 	return nil
 }
 
-func (app *App) Refresh(ctx context.Context, cfg ActionConfig) error {
-	var configurators []tern.ActionConfigurator
-	if cfg.Steps > 0 {
-		configurators = append(configurators, tern.WithSteps(cfg.Steps))
+func (app *App) Refresh(ctx context.Context, steps int, versions []string) error {
+	configurators, err := tern.CreateConfigurators(steps, versions)
+	if err != nil {
+		return err
 	}
 
-	if _, _, err := app.migrator.Refresh(ctx, configurators...); err != nil {
-		return err
+	if _, _, refreshErr := app.migrator.Refresh(ctx, configurators...); refreshErr != nil {
+		return refreshErr
 	}
 
 	return nil

@@ -7,6 +7,7 @@ import (
 	"github.com/denismitr/tern/v2/migration"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
 	"time"
@@ -75,10 +76,13 @@ func Test_ConvertLocalFolder(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
 		defer cancel()
 
-		migrations, err := c.Select(ctx, Filter{Keys: []string{"1596897188_create_bar_table", "1597897177_create_baz_table"}})
+		migrations, err := c.Select(
+			ctx,
+			Filter{Versions: []migration.Version{{Value: "1596897188"}, {Value: "1597897177"}}},
+		)
 
-		assert.NoError(t, err)
-		assert.Len(t, migrations, 2)
+		require.NoError(t, err)
+		require.Len(t, migrations, 2)
 
 		assert.Equal(t, "Create bar table", migrations[0].Name)
 		assert.Equal(t, "1596897188", migrations[0].Version.Value)

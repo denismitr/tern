@@ -33,11 +33,17 @@ deps:
 lint:
 	golangci-lint run ./...
 
-migrate:
-	cd ./cmd && ./tern-cli -migrate -folder "./stubs/migrations/mysql" -db "mysql://tern:secret@tcp(127.0.0.1:33066)/tern_db?parseTime=true"
+migrate/mysql/datetime:
+	./cmd/tern-cli -migrate -cfg "./stubs/cfg/tern-mysql-datetime.yaml"
 
-rollback:
-	cd ./cmd && ./tern-cli -rollback -folder "./stubs/migrations/mysql" -db "mysql://tern:secret@tcp(127.0.0.1:33066)/tern_db?parseTime=true"
+migrate/mysql/timestamp:
+	./cmd/tern-cli -migrate -cfg "./stubs/cfg/tern-mysql-timestamp.yaml"
 
-refresh:
-	cd ./cmd && ./tern-cli -refresh -folder "./stubs/migrations/mysql" -db "mysql://tern:secret@tcp(127.0.0.1:33066)/tern_db?parseTime=true"
+rollback/mysql/datetime:
+	./cmd/tern-cli -rollback -cfg "./stubs/cfg/tern-mysql-datetime.yaml"
+
+rollback/mysql/timestamp:
+	./cmd/tern-cli -rollback -cfg "./stubs/cfg/tern-mysql-timestamp.yaml"
+
+refresh/mysql/refresh:
+	./cmd/tern-cli -refresh -cfg "./stubs/cfg/tern-mysql-datetime.yaml"

@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -229,4 +230,70 @@ func Test_ConvertPathToKey(t *testing.T) {
 			assert.Equal(t, "", out)
 		})
 	}
+}
+
+func TestLocalFileSource_Create(t *testing.T) {
+	t.Run("create with fallback", func(t *testing.T) {
+		folder, err := filepath.Abs("/tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
+		if err != nil {
+			t.Fatalf("unexpected error %+v", err)
+		}
+
+		m, err := c.Create("1596897188", "foo_bar", true)
+		if err != nil {
+			t.Fatalf("unexpected error %+v", err)
+		}
+
+		if m == nil {
+			t.Fatal("how can migration be nil?")
+		}
+
+		require.FileExists(t, "/tmp/1596897188_foo_bar.migrate.sql")
+		require.FileExists(t, "/tmp/1596897188_foo_bar.rollback.sql")
+
+		if err := os.Remove("/tmp/1596897188_foo_bar.migrate.sql"); err != nil {
+			t.Errorf("unexpected error %+v", err)
+		}
+
+		if err := os.Remove("/tmp/1596897188_foo_bar.rollback.sql"); err != nil {
+			t.Errorf("unexpected error %+v", err)
+		}
+	})
+
+	t.Run("create without fallback", func(t *testing.T) {
+		folder, err := filepath.Abs("/tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.TimestampFormat)
+		if err != nil {
+			t.Fatalf("unexpected error %+v", err)
+		}
+
+		m, err := c.Create("1596897188", "foo_bar", false)
+		if err != nil {
+			t.Fatalf("unexpected error %+v", err)
+		}
+
+		if m == nil {
+			t.Fatal("how can migration be nil?")
+		}
+
+		assert.Equal(t, "foo_bar", m.Name)
+		assert.Equal(t, "1596897188", m.Version.Value)
+		assert.Equal(t, migration.TimestampFormat, m.Version.Format)
+
+		require.FileExists(t, "/tmp/1596897188_foo_bar.migrate.sql")
+		assert.NoFileExists(t, "/tmp/1596897188_foo_bar.rollback.sql")
+
+		if err := os.Remove("/tmp/1596897188_foo_bar.migrate.sql"); err != nil {
+			t.Errorf("unexpected error %+v", err)
+		}
+	})
 }

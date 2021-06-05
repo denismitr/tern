@@ -36,22 +36,23 @@ const (
 type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
 
 type LocalFileSource struct {
-	folder string
-	lg logger.Logger
+	folder        string
+	lg            logger.Logger
 	versionRegexp *regexp.Regexp
-	nameRegexp *regexp.Regexp
+	nameRegexp    *regexp.Regexp
+	versionFormat migration.VersionFormat
 }
 
-func (lfs *LocalFileSource) Create(dt, name string, withRollback bool, format migration.VersionFormat) (*migration.Migration, error) {
+func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
 	key := migration.CreateKeyFromVersionAndName(dt, name)
-	migrateFilename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
+	migrateFilename := filepath.Join(lfs.folder, key + defaultMigrateFileFullExtension)
 	mf, err := os.Create(migrateFilename)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not create file [%s]", migrateFilename)
 	}
 
-	if err := mf.Close(); err != nil {
-		return nil, err
+	if cErr := mf.Close(); cErr != nil {
+		return nil, errors.Wrapf(cErr, "could not close file %s", migrateFilename)
 	}
 
 	m := &migration.Migration{
@@ -59,19 +60,19 @@ func (lfs *LocalFileSource) Create(dt, name string, withRollback bool, format mi
 		Name: name,
 		Version: migration.Version{
 			Value: dt,
-			Format: format,
+			Format: lfs.versionFormat,
 		},
 	}
 
 	if withRollback {
-		rollbackFilename := filepath.Join(lfs.folder, key +defaultRollbackFileFullExtension)
+		rollbackFilename := filepath.Join(lfs.folder, key + defaultRollbackFileFullExtension)
 		rf, err := os.Create(rollbackFilename)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not create file [%s]", rollbackFilename)
 		}
 
-		if err := rf.Close(); err != nil {
-			return nil, err
+		if cErr := rf.Close(); cErr != nil {
+			return nil, errors.Wrapf(cErr, "could not close file %s", rollbackFilename)
 		}
 	}
 
@@ -92,6 +93,7 @@ func NewLocalFSSource(
 		folder: folder,
 		versionRegexp: versionRegexp,
 		nameRegexp: nameRegexp,
+		versionFormat: vf,
 		lg: lg,
 	}, nil
 }

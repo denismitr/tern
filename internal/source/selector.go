@@ -25,7 +25,7 @@ type Source interface {
 
 	IsValid() bool
 	AlreadyExists(dt, name string) bool
-	Create(dt, name string, withRollback bool, format migration.VersionFormat) (*migration.Migration, error)
+	Create(dt, name string, withRollback bool) (*migration.Migration, error)
 }
 
 func filterMigrations(m migration.Migrations, f Filter) migration.Migrations {

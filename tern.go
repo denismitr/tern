@@ -86,7 +86,7 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 		return nil, connErr
 	}
 
-	p := database.Plan{Steps: act.steps}
+	p := database.Plan{Steps: act.steps, Versions: act.versions}
 	migrated, err := m.gateway.Migrate(ctx, migrations, p)
 	if err != nil {
 		if errors.Is(err, database.ErrNoChangesRequired) {

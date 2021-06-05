@@ -9,12 +9,14 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
 
 const mysqlConnection = "tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true"
 const mysqlTimestampsMigrationsFolder = "./stubs/migrations/mysql/timestamp"
+const mysqlBrokenMigrationsFolder = "./stubs/migrations/mysql/broken"
 const mysqlDatetimeMigrationsFolder = "./stubs/migrations/mysql/datetime"
 
 func Test_MigratorCanBeInstantiated(t *testing.T) {
@@ -325,6 +327,38 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		if err := m.dbGateway().DropMigrationsTable(ctx); err != nil {
 			t.Fatal(err)
 		}
+	})
+
+	t.Run("it will stop when migration fails without committing the failed version", func(t *testing.T) {
+		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlBrokenMigrationsFolder))
+		assert.NoError(t, err)
+
+		defer func() {
+			assert.NoError(t, closer())
+		}()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		defer cancel()
+
+		keys, err := m.Migrate(ctx)
+		require.Error(t, err)
+		require.Len(t, keys, 0)
+
+		versions, err := m.dbGateway().ReadVersions(ctx)
+		assert.NoError(t, err)
+		assert.Len(t, versions, 1)
+		assert.Equal(t, "20191023224318", versions[0].Value)
+
+		// expect 0 tables to exist now in the DB
+		tables, err := m.dbGateway().ShowTables(ctx)
+		require.NoError(t, err)
+		assert.Len(t, tables, 2)
+		assert.Equal(t, []string{"foo", database.DefaultMigrationsTable}, tables)
+
+		// DO: execute down migrations to rollback
+		executed, err := m.Rollback(ctx)
+		require.NoError(t, err)
+		assert.Len(t, executed, 1)
 	})
 
 	t.Run("run_single_migration_when_step_is_one", func(t *testing.T) {

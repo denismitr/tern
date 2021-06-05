@@ -258,23 +258,38 @@ func (lfs *LocalFileSource) readOne(key string) (*migration.Migration, error) {
 		return nil, err
 	}
 
-	defer fUp.Close()
+	defer func() {
+		if cErr := fUp.Close(); cErr != nil {
+			lfs.lg.Error(cErr)
+		}
+	}()
 
 	fDown, err := os.Open(down)
 	if err != nil {
-		return nil, err
+		// rollback version may not be present
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	} else {
+		defer func() {
+			if cErr := fDown.Close(); cErr != nil {
+				lfs.lg.Error(cErr)
+			}
+		}()
 	}
-
-	defer fDown.Close()
 
 	migrateContents, err := ioutil.ReadAll(fUp);
 	if err != nil {
 		return nil, err
 	}
 
-	rollbackContents, err := ioutil.ReadAll(fDown);
-	if err != nil {
-		return nil, err
+	var rollbackContents []byte
+	if fDown != nil {
+		if contents, err := ioutil.ReadAll(fDown); err != nil {
+			return nil, err
+		} else {
+			rollbackContents = contents
+		}
 	}
 
 	return lfs.createMigration(key, migrateContents, rollbackContents)

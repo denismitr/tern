@@ -33,6 +33,8 @@ const (
 	anyBasedNameFormat = `^\d{9,14}_(?P<name>\w+[\w_-]+)?$`
 )
 
+var ErrMigrationAlreadyExists = errors.New("migration already exists")
+
 type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
 
 type LocalFileSource struct {
@@ -46,6 +48,11 @@ type LocalFileSource struct {
 func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
 	key := migration.CreateKeyFromVersionAndName(dt, name)
 	migrateFilename := filepath.Join(lfs.folder, key + defaultMigrateFileFullExtension)
+
+	if lfs.AlreadyExists(dt, name) {
+		return nil, errors.Wrapf(ErrMigrationAlreadyExists, "migration %s with key already exists", key)
+	}
+
 	mf, err := os.Create(migrateFilename)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not create file [%s]", migrateFilename)

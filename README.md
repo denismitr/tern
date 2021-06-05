@@ -200,3 +200,39 @@ func main() {
 }
 
 ```
+
+## Migration options
+`Migrate`, `Rollback` and `Refresh` optional variadic configurators
+```go
+
+// set amount of steps (number of migrations) to migrate, rollback or refresh
+func WithSteps(steps int) ActionConfigurator
+
+// set specific versions to migrate, rollback or refresh
+func WithVersions(versions ...migration.Version) ActionConfigurator
+```
+
+### MySQL with options
+```go
+// MySQL migrations
+func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc
+
+// Disable LOCK before running migrations - may be required in multi-master
+// that may not support GET_LOCK function
+func WithMySQLNoLock() MySQLOptionFunc
+
+// override default lock key
+func WithMySQLLockKey(key string) MySQLOptionFunc
+
+// override lock timeout
+func WithMySQLLockFor(lockFor int) MySQLOptionFunc
+
+// override default migration versions table name
+func WithMySQLMigrationTable(migrationTable string) MySQLOptionFunc
+
+// override default connection timeout
+func WithMySQLConnectionTimeout(timeout time.Duration) MySQLOptionFunc
+
+// override default max connection attempts
+func WithMySQLMaxConnectionAttempts(attempts int) MySQLOptionFunc
+```

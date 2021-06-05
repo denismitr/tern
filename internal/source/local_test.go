@@ -233,7 +233,7 @@ func Test_ConvertPathToKey(t *testing.T) {
 }
 
 func TestLocalFileSource_Create(t *testing.T) {
-	t.Run("create with fallback", func(t *testing.T) {
+	t.Run("create timestamp format with rollback", func(t *testing.T) {
 		folder, err := filepath.Abs("/tmp")
 		if err != nil {
 			t.Fatal(err)
@@ -265,7 +265,39 @@ func TestLocalFileSource_Create(t *testing.T) {
 		}
 	})
 
-	t.Run("create without fallback", func(t *testing.T) {
+	t.Run("create datetime format with rollback", func(t *testing.T) {
+		folder, err := filepath.Abs("/tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.DatetimeFormat)
+		if err != nil {
+			t.Fatalf("unexpected error %+v", err)
+		}
+
+		m, err := c.Create("20210618163457", "fooBar", true)
+		if err != nil {
+			t.Fatalf("unexpected error %+v", err)
+		}
+
+		if m == nil {
+			t.Fatal("how can migration be nil?")
+		}
+
+		require.FileExists(t, "/tmp/20210618163457_fooBar.migrate.sql")
+		require.FileExists(t, "/tmp/20210618163457_fooBar.rollback.sql")
+
+		if err := os.Remove("/tmp/20210618163457_fooBar.migrate.sql"); err != nil {
+			t.Errorf("unexpected error %+v", err)
+		}
+
+		if err := os.Remove("/tmp/20210618163457_fooBar.rollback.sql"); err != nil {
+			t.Errorf("unexpected error %+v", err)
+		}
+	})
+
+	t.Run("create timestamp format without rollback", func(t *testing.T) {
 		folder, err := filepath.Abs("/tmp")
 		if err != nil {
 			t.Fatal(err)
@@ -293,6 +325,34 @@ func TestLocalFileSource_Create(t *testing.T) {
 		assert.NoFileExists(t, "/tmp/1596897188_foo_bar.rollback.sql")
 
 		if err := os.Remove("/tmp/1596897188_foo_bar.migrate.sql"); err != nil {
+			t.Errorf("unexpected error %+v", err)
+		}
+	})
+
+	t.Run("create datetime format without rollback", func(t *testing.T) {
+		folder, err := filepath.Abs("/tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c, err := NewLocalFSSource(folder, &logger.NullLogger{}, migration.DatetimeFormat)
+		if err != nil {
+			t.Fatalf("unexpected error %+v", err)
+		}
+
+		m, err := c.Create("20210618163457", "fooBar", false)
+		if err != nil {
+			t.Fatalf("unexpected error %+v", err)
+		}
+
+		if m == nil {
+			t.Fatal("how can migration be nil?")
+		}
+
+		require.FileExists(t, "/tmp/20210618163457_fooBar.migrate.sql")
+		require.NoFileExists(t, "/tmp/20210618163457_fooBar.rollback.sql")
+
+		if err := os.Remove("/tmp/20210618163457_fooBar.migrate.sql"); err != nil {
 			t.Errorf("unexpected error %+v", err)
 		}
 	})

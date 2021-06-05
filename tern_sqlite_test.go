@@ -8,6 +8,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
@@ -56,13 +57,13 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
 			"1596897188_create_bar_table",
 			"1597897177_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
@@ -506,13 +507,13 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
 			"1596897188_create_bar_table",
 			"1597897177_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
@@ -598,13 +599,13 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
 			"1596897188_create_bar_table",
 			"1597897177_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
@@ -696,13 +697,13 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
 			"1596897188_create_bar_table",
 			"1597897177_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {

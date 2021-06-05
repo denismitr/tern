@@ -60,13 +60,13 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
 			"1596897188_create_bar_table",
 			"1597897177_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
@@ -131,13 +131,13 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"20191023224318_create_foo_table",
 			"20191023225128_create_bar_table",
 			"20191025053924_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
@@ -340,9 +340,10 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
 		defer cancel()
 
-		keys, err := m.Migrate(ctx)
+		migrated, err := m.Migrate(ctx)
 		require.Error(t, err)
-		require.Len(t, keys, 0)
+		assert.Len(t, migrated, 1)
+		assert.Equal(t, []string{"20191023224318_create_foo_table"}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		assert.NoError(t, err)
@@ -614,13 +615,13 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
 			"1596897188_create_bar_table",
 			"1597897177_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
@@ -706,13 +707,13 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
 			"1596897188_create_bar_table",
 			"1597897177_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
@@ -806,13 +807,13 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		keys, err := m.Migrate(ctx)
-		assert.NoError(t, err)
+		migrated, err := m.Migrate(ctx)
+		require.NoError(t, err)
 		assert.Equal(t, []string{
 			"1596897167_create_foo_table",
 			"1596897188_create_bar_table",
 			"1597897177_create_baz_table",
-		}, keys)
+		}, migrated.Keys())
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {

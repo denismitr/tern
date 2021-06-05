@@ -116,14 +116,14 @@ func (g *SQLGateway) Migrate(ctx context.Context, migrations migration.Migration
 
 		return nil
 	}); err != nil {
-		return nil, err
+		return migrated, err
 	}
 
 	return migrated, nil
 }
 
 func (g *SQLGateway) Rollback(ctx context.Context, migrations migration.Migrations, p database.Plan) (migration.Migrations, error) {
-	var executed migration.Migrations
+	var rolledBack migration.Migrations
 
 	if err := g.execUnderLock(ctx, database.OperationRollback, func(tx *sql.Tx, migratedVersions []migration.Version) error {
 		scheduled := database.ScheduleForRollback(migrations, migratedVersions, p)
@@ -140,15 +140,15 @@ func (g *SQLGateway) Rollback(ctx context.Context, migrations migration.Migratio
 
 			g.lg.Successf("rolled back: %s", scheduled[i].Key)
 
-			executed = append(executed, scheduled[i])
+			rolledBack = append(rolledBack, scheduled[i])
 		}
 
 		return nil
 	}); err != nil {
-		return nil, err
+		return rolledBack, err
 	}
 
-	return executed, nil
+	return rolledBack, nil
 }
 
 func (g *SQLGateway) Refresh(
@@ -188,7 +188,7 @@ func (g *SQLGateway) Refresh(
 
 		return nil
 	}); err != nil {
-		return nil, nil, err
+		return rolledBack, migrated, err
 	}
 
 	return rolledBack, migrated, nil

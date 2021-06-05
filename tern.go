@@ -70,7 +70,7 @@ func NewMigrator(opts ...OptionFunc) (*Migrator, CloserFunc, error) {
 
 // Migrate the migrations using Action configurator callbacks to customize
 // the process of migration
-func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]string, error) {
+func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) (migration.Migrations, error) {
 	act := new(Action)
 	for _, f := range cfs {
 		f(act)
@@ -95,10 +95,10 @@ func (m *Migrator) Migrate(ctx context.Context, cfs ...ActionConfigurator) ([]st
 
 		m.lg.Error(err)
 
-		return nil, err
+		return migrated, err
 	}
 
-	return migrated.Keys(), nil
+	return migrated, nil
 }
 
 // Rollback the migrations using Action configurator callbacks
@@ -119,17 +119,18 @@ func (m *Migrator) Rollback(ctx context.Context, cfs ...ActionConfigurator) (mig
 		return nil, connErr
 	}
 
-	executed, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps, Versions: act.versions})
+	rolledBack, err := m.gateway.Rollback(ctx, migrations, database.Plan{Steps: act.steps, Versions: act.versions})
 	if err != nil {
 		if errors.Is(err, database.ErrNoChangesRequired) {
 			return nil, ErrNothingToMigrateOrRollback
 		}
 
 		m.lg.Error(err)
-		return nil, errors.Wrap(err, "could not rollback migrations")
+
+		return rolledBack, errors.Wrap(err, "could not rollback migrations")
 	}
 
-	return executed, nil
+	return rolledBack, nil
 }
 
 // Refresh first rollbacks the migrations and then migrates them again

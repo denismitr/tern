@@ -33,6 +33,10 @@ deps:
 lint:
 	golangci-lint run ./...
 
+mock: deps
+	mockgen -source ./internal/database/sqlgateway/contracts.go -package sqlgateway -destination ./internal/database/sqlgateway/contracts_mock_test.go
+	mockgen -source ./internal/database/sqlgateway/connector.go -package sqlgateway -destination ./internal/database/sqlgateway/connector_mock_test.go
+
 migrate/mysql/datetime:
 	./cmd/tern-cli -migrate -cfg "./stubs/cfg/tern-mysql-datetime.yaml"
 

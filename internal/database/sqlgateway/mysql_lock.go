@@ -2,35 +2,38 @@ package sqlgateway
 
 import (
 	"context"
-	"database/sql"
 	"github.com/pkg/errors"
 )
 
 type mySQLLocker struct {
-	lockKey string
-	lockFor int
-	noLock  bool
+	lockKey   string
+	lockFor   int
+	noLock    bool
 }
 
-func (g *mySQLLocker) Lock(ctx context.Context, conn *sql.Conn) error {
-	if g.noLock {
+func newMySQLLocker(lockKey string, lockFor int, noLock bool) *mySQLLocker {
+	return &mySQLLocker{lockKey: lockKey, lockFor: lockFor, noLock: noLock}
+}
+
+func (msl *mySQLLocker) lock(ctx context.Context, ex Executor) error {
+	if msl.noLock {
 		return nil
 	}
 
-	if _, err := conn.ExecContext(ctx, "SELECT GET_LOCK(?, ?)", g.lockKey, g.lockFor); err != nil {
-		return errors.Wrapf(err, "could not obtain [%s] exclusive MySQL DB Lock for [%d] seconds", g.lockKey, g.lockFor)
+	if _, err := ex.ExecContext(ctx, "SELECT GET_LOCK(?, ?)", msl.lockKey, msl.lockFor); err != nil {
+		return errors.Wrapf(err, "could not obtain [%s] exclusive MySQL DB lock for [%d] seconds", msl.lockKey, msl.lockFor)
 	}
 
 	return nil
 }
 
-func (g *mySQLLocker) Unlock(ctx context.Context, conn *sql.Conn) error {
-	if g.noLock {
+func (msl *mySQLLocker) unlock(ctx context.Context, ex Executor) error {
+	if msl.noLock {
 		return nil
 	}
 
-	if _, err := conn.ExecContext(ctx, "SELECT RELEASE_LOCK(?)", g.lockKey); err != nil {
-		return errors.Wrapf(err, "could not release [%s] exclusive MySQL DB Lock", g.lockKey)
+	if _, err := ex.ExecContext(ctx, "SELECT RELEASE_LOCK(?)", msl.lockKey); err != nil {
+		return errors.Wrapf(err, "could not release [%s] exclusive MySQL DB lock", msl.lockKey)
 	}
 
 	return nil

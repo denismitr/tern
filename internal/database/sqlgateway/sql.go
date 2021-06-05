@@ -25,7 +25,7 @@ type MySQLOptions struct {
 }
 
 type SQLGateway struct {
-	locker    database.Locker
+	locker    locker
 	lg        logger.Logger
 	conn      *sql.Conn
 	connector SQLConnector
@@ -39,11 +39,7 @@ var _ database.Gateway = (*SQLGateway)(nil)
 func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway, database.ConnCloser) {
 	gateway := SQLGateway{}
 	gateway.connector = connector
-	gateway.locker = &mySQLLocker{
-		lockKey: options.LockKey,
-		lockFor: options.LockFor,
-		noLock:  options.NoLock,
-	}
+	gateway.locker = newMySQLLocker(options.LockKey, options.LockFor, options.NoLock)
 
 	if options.MigrationsTable == "" {
 		options.MigrationsTable = database.DefaultMigrationsTable
@@ -62,7 +58,7 @@ func NewMySQLGateway(connector SQLConnector, options *MySQLOptions) (*SQLGateway
 func NewSqliteGateway(connector SQLConnector, options *SqliteOptions) (*SQLGateway, database.ConnCloser) {
 	gateway := SQLGateway{}
 	gateway.connector = connector
-	gateway.locker = &database.NullLocker{}
+	gateway.locker = &nullLocker{}
 
 	if options.MigrationsTable == "" {
 		options.MigrationsTable = database.DefaultMigrationsTable
@@ -298,8 +294,8 @@ func (g *SQLGateway) ShowTables(ctx context.Context) ([]string, error) {
 }
 
 func (g *SQLGateway) execUnderLock(ctx context.Context, operation string, f func(*sql.Tx, []migration.Version) error) error {
-	if err := g.locker.Lock(ctx, g.conn); err != nil {
-		return errors.Wrap(err, "database Lock failed")
+	if err := g.locker.lock(ctx, g.conn); err != nil {
+		return errors.Wrap(err, "database lock failed")
 	}
 
 	handleError := func(err error, tx *sql.Tx) error {
@@ -314,7 +310,7 @@ func (g *SQLGateway) execUnderLock(ctx context.Context, operation string, f func
 			}
 		}
 
-		unlockErr = g.locker.Unlock(ctx, g.conn)
+		unlockErr = g.locker.unlock(ctx, g.conn)
 		if unlockErr != nil {
 			result = errors.Wrapf(result, unlockErr.Error())
 		}
@@ -352,7 +348,7 @@ func (g *SQLGateway) execUnderLock(ctx context.Context, operation string, f func
 		return handleError(errors.Wrapf(err, "could not commit [%s] operation, rolled back", operation), tx)
 	}
 
-	return g.locker.Unlock(ctx, g.conn)
+	return g.locker.unlock(ctx, g.conn)
 }
 
 func (g *SQLGateway) migrateOne(ctx context.Context, ex ctxExecutor, m *migration.Migration) error {

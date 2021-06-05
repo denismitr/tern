@@ -49,6 +49,10 @@ func MakeRetryingConnector(db *sql.DB, options *ConnectOptions) *RetryingConnect
 }
 
 func (c *RetryingConnector) Connect(ctx context.Context) (*sql.Conn, error) {
+	if c.conn != nil {
+		return c.conn, nil
+	}
+
 	result, err := retry.Incremental(ctx, 2*time.Second, c.options.MaxAttempts, func(attempt int) (interface{}, error) {
 		conn, err := c.db.Conn(ctx)
 		if err != nil {
@@ -70,6 +74,8 @@ func (c *RetryingConnector) Connect(ctx context.Context) (*sql.Conn, error) {
 	if !ok {
 		panic("how could result not be an instance of *sql.Conn")
 	}
+
+	c.conn = conn
 
 	return conn, nil
 }

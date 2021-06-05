@@ -129,7 +129,7 @@ if err != nil {
     panic(err)
 }
 
-fmt.Printf("%#v", migrated)
+fmt.Printf("%#v", migrated.Keys())
 // []string{"1596897167_create_foo_table", "1596897188_create_bar_table", "1597897177_create_baz_table"}
 ```
 
@@ -194,8 +194,8 @@ func main() {
 		panic(err)
 	}
 
-	for i := range migrated {
-		fmt.Printf("\nMigrated SQL %s", migrated[i])
+	for _, k := range migrated.Keys() {
+		fmt.Printf("\nMigrated SQL %s", k)
 	}
 }
 

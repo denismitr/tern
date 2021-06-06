@@ -7,10 +7,7 @@ import (
 	"time"
 )
 
-type (
-	MySQLOptionFunc  func(*sqlgateway.MySQLOptions, *sqlgateway.ConnectOptions)
-	SqliteOptionFunc func(*sqlgateway.SqliteOptions, *sqlgateway.ConnectOptions)
-)
+type MySQLOptionFunc  func(*sqlgateway.MySQLOptions, *sqlgateway.ConnectOptions)
 
 func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 	return func(m *Migrator) error {
@@ -39,54 +36,6 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 	}
 }
 
-func UseSqlite(db *sql.DB, options ...SqliteOptionFunc) OptionFunc {
-	return func(m *Migrator) error {
-		sqliteOpts := &sqlgateway.SqliteOptions{
-			CommonOptions: database.CommonOptions{
-				MigrationsTable:  database.DefaultMigrationsTable,
-				MigratedAtColumn: database.MigratedAtColumn,
-			},
-		}
-
-		connectOpts := sqlgateway.NewDefaultConnectOptions()
-
-		for _, oFunc := range options {
-			oFunc(sqliteOpts, connectOpts)
-		}
-
-		connector := sqlgateway.MakeRetryingConnector(db, connectOpts)
-		gateway, closer := sqlgateway.NewSqliteGateway(connector, sqliteOpts)
-
-		m.gateway = gateway
-		m.closerFns = append(m.closerFns, CloserFunc(closer))
-
-		return nil
-	}
-}
-
-func WithSqliteMigrationTable(migrationTable string) SqliteOptionFunc {
-	return func(mysqlOpts *sqlgateway.SqliteOptions, connectOpts *sqlgateway.ConnectOptions) {
-		mysqlOpts.MigrationsTable = migrationTable
-	}
-}
-
-func WithSqliteMigratedAtColumn(column string) SqliteOptionFunc {
-	return func(mysqlOpts *sqlgateway.SqliteOptions, connectOpts *sqlgateway.ConnectOptions) {
-		mysqlOpts.MigratedAtColumn = column
-	}
-}
-
-func WithSqliteMaxConnectionAttempts(attempts int) SqliteOptionFunc {
-	return func(mysqlOpts *sqlgateway.SqliteOptions, connectOpts *sqlgateway.ConnectOptions) {
-		connectOpts.MaxAttempts = attempts
-	}
-}
-
-func WithSqliteConnectionTimeout(timeout time.Duration) SqliteOptionFunc {
-	return func(mysqlOpts *sqlgateway.SqliteOptions, connectOpts *sqlgateway.ConnectOptions) {
-		connectOpts.MaxTimeout = timeout
-	}
-}
 
 func WithMySQLNoLock() MySQLOptionFunc {
 	return func(mysqlOpts *sqlgateway.MySQLOptions, connectOpts *sqlgateway.ConnectOptions) {

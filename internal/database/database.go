@@ -7,7 +7,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrMigrationsTableIsEmpty = errors.New("migrations table is empty")
 var ErrNoChangesRequired = errors.New("no changes to the database required")
 var ErrMigrationVersionNotSpecified = errors.New("migration version not specified")
 

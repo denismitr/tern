@@ -12,31 +12,31 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockExecutor is a mock of Executor interface.
-type MockExecutor struct {
+// MockctxExecutor is a mock of ctxExecutor interface.
+type MockctxExecutor struct {
 	ctrl     *gomock.Controller
-	recorder *MockExecutorMockRecorder
+	recorder *MockctxExecutorMockRecorder
 }
 
-// MockExecutorMockRecorder is the mock recorder for MockExecutor.
-type MockExecutorMockRecorder struct {
-	mock *MockExecutor
+// MockctxExecutorMockRecorder is the mock recorder for MockctxExecutor.
+type MockctxExecutorMockRecorder struct {
+	mock *MockctxExecutor
 }
 
-// NewMockExecutor creates a new mock instance.
-func NewMockExecutor(ctrl *gomock.Controller) *MockExecutor {
-	mock := &MockExecutor{ctrl: ctrl}
-	mock.recorder = &MockExecutorMockRecorder{mock}
+// NewMockctxExecutor creates a new mock instance.
+func NewMockctxExecutor(ctrl *gomock.Controller) *MockctxExecutor {
+	mock := &MockctxExecutor{ctrl: ctrl}
+	mock.recorder = &MockctxExecutorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockExecutor) EXPECT() *MockExecutorMockRecorder {
+func (m *MockctxExecutor) EXPECT() *MockctxExecutorMockRecorder {
 	return m.recorder
 }
 
 // ExecContext mocks base method.
-func (m *MockExecutor) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (m *MockctxExecutor) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{ctx, query}
 	for _, a := range args {
@@ -49,8 +49,8 @@ func (m *MockExecutor) ExecContext(ctx context.Context, query string, args ...in
 }
 
 // ExecContext indicates an expected call of ExecContext.
-func (mr *MockExecutorMockRecorder) ExecContext(ctx, query interface{}, args ...interface{}) *gomock.Call {
+func (mr *MockctxExecutorMockRecorder) ExecContext(ctx, query interface{}, args ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{ctx, query}, args...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockExecutor)(nil).ExecContext), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockctxExecutor)(nil).ExecContext), varargs...)
 }

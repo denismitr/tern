@@ -15,7 +15,7 @@ func newMySQLLocker(lockKey string, lockFor int, noLock bool) *mySQLLocker {
 	return &mySQLLocker{lockKey: lockKey, lockFor: lockFor, noLock: noLock}
 }
 
-func (msl *mySQLLocker) lock(ctx context.Context, ex Executor) error {
+func (msl *mySQLLocker) lock(ctx context.Context, ex ctxExecutor) error {
 	if msl.noLock {
 		return nil
 	}
@@ -27,7 +27,7 @@ func (msl *mySQLLocker) lock(ctx context.Context, ex Executor) error {
 	return nil
 }
 
-func (msl *mySQLLocker) unlock(ctx context.Context, ex Executor) error {
+func (msl *mySQLLocker) unlock(ctx context.Context, ex ctxExecutor) error {
 	if msl.noLock {
 		return nil
 	}

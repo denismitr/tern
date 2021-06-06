@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-var _ Executor = (*sql.Conn)(nil)
-var _ Executor = (*MockExecutor)(nil)
+var _ ctxExecutor = (*sql.Conn)(nil)
+var _ ctxExecutor = (*MockctxExecutor)(nil)
 
 func TestMySQLLocker_Lock(t *testing.T) {
 	t.Parallel()
@@ -19,7 +19,7 @@ func TestMySQLLocker_Lock(t *testing.T) {
 		noLock := false
 
 		ctrl := gomock.NewController(t)
-		executor := NewMockExecutor(ctrl)
+		executor := NewMockctxExecutor(ctrl)
 
 		ctx := context.Background()
 
@@ -43,7 +43,7 @@ func TestMySQLLocker_Lock(t *testing.T) {
 		noLock := true
 
 		ctrl := gomock.NewController(t)
-		executor := NewMockExecutor(ctrl)
+		executor := NewMockctxExecutor(ctrl)
 
 		ctx := context.Background()
 
@@ -70,7 +70,7 @@ func TestMySQLLocker_Unlock(t *testing.T) {
 		noLock := false
 
 		ctrl := gomock.NewController(t)
-		executor := NewMockExecutor(ctrl)
+		executor := NewMockctxExecutor(ctrl)
 
 		ctx := context.Background()
 
@@ -94,7 +94,7 @@ func TestMySQLLocker_Unlock(t *testing.T) {
 		noLock := true
 
 		ctrl := gomock.NewController(t)
-		executor := NewMockExecutor(ctrl)
+		executor := NewMockctxExecutor(ctrl)
 
 		ctx := context.Background()
 

@@ -13,10 +13,6 @@ import (
 const MysqlDefaultLockKey = "tern_migrations"
 const MysqlDefaultLockSeconds = 3
 
-type ctxExecutor interface {
-	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
-}
-
 type MySQLOptions struct {
 	database.CommonOptions
 	LockKey string

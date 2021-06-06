@@ -1,0 +1,6 @@
+version: "1"
+
+migrations:
+  local_folder: "stubs/migrations/mysql/datetime"
+  database_url: "mysql://tern:secret@(127.0.0.1:33066)/tern_db?parseTime=true"
+  version_format: datetime

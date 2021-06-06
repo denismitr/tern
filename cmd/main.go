@@ -4,10 +4,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/denismitr/tern/database"
-	"github.com/denismitr/tern/internal/cli"
+	"github.com/denismitr/tern/v2"
+	"github.com/denismitr/tern/v2/internal/cli"
+	"github.com/denismitr/tern/v2/internal/database"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/pkg/errors"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -26,6 +29,7 @@ func main() {
 
 	timeout := flag.Int("timeout", defaultTimeout, "max timeout")
 	steps := flag.Int("steps", 0, "steps to execute")
+	versionList := flag.String("versions", "", "version list (comma separated) to perform action on")
 
 	flag.Parse()
 
@@ -36,6 +40,15 @@ func main() {
 	if *initFlag {
 		createConfigFile(*configFile)
 		return
+	}
+
+	var versions []string
+	if *versionList != "" {
+		versions = strings.Split(*versionList, ",")
+	}
+
+	if *steps != 0 && len(versions) > 0 {
+		exitWithError(errors.New("choose between using steps and versions, you cannot have both"))
 	}
 
 	app, closer, err := cli.NewFromYaml(*configFile)
@@ -55,24 +68,24 @@ func main() {
 	}
 
 	if *migrateFlag {
-		migrate(app, *steps, *timeout)
+		migrate(app, *steps, versions, *timeout)
 		return
 	}
 
 	if *rollbackFlag {
-		rollback(app, *steps, *timeout)
+		rollback(app, *steps, versions, *timeout)
 		return
 	}
 
 	if *refreshFlag {
-		refresh(app, *steps, *timeout)
+		refresh(app, *steps, versions, *timeout)
 		return
 	}
 
 	exitWithError(errors.New("You need to choose on of commands: init-cfg, create, migrate, rollback, refresh"))
 }
 
-func refresh(app *cli.App, steps, timeout int) {
+func refresh(app *cli.App, steps int, versions []string, timeout int) {
 	if timeout <= 0 {
 		exitWithError(errors.New("refresh timeout must be a positive integer or simply be omitted"))
 	}
@@ -80,14 +93,14 @@ func refresh(app *cli.App, steps, timeout int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	if err := app.Rollback(ctx, cli.ActionConfig{Steps: steps}); err != nil {
+	if err := app.Refresh(ctx, steps, versions); err != nil {
 		exitWithError(err)
 	}
 
 	green("Migration refresh completed. All done...")
 }
 
-func rollback(app *cli.App, steps, timeout int) {
+func rollback(app *cli.App, steps int, versions []string, timeout int) {
 	if timeout <= 0 {
 		exitWithError(errors.New("rollback timeout must be a positive integer or simply be omitted"))
 	}
@@ -95,14 +108,14 @@ func rollback(app *cli.App, steps, timeout int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	if err := app.Rollback(ctx, cli.ActionConfig{Steps: steps}); err != nil {
+	if err := app.Rollback(ctx, steps, versions); err != nil {
 		exitWithError(err)
 	}
 
 	green("Migration rollback completed. All done...")
 }
 
-func migrate(app *cli.App, steps, timeout int) {
+func migrate(app *cli.App, steps int, versions []string, timeout int) {
 	if timeout <= 0 {
 		exitWithError(errors.New("migrate timeout must be a positive integer or simply be omitted"))
 	}
@@ -110,8 +123,8 @@ func migrate(app *cli.App, steps, timeout int) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	if err := app.Migrate(ctx, cli.ActionConfig{Steps: steps}); err != nil {
-		if errors.Is(err, database.ErrNothingToMigrate) {
+	if err := app.Migrate(ctx, steps, versions); err != nil {
+		if errors.Is(err, database.ErrNoChangesRequired) {
 			green("Nothing to migrate")
 			return
 		}
@@ -157,6 +170,12 @@ func red(s string, f ...interface{}) {
 }
 
 func exitWithError(err error) {
+	if errors.Is(err, tern.ErrNothingToMigrateOrRollback) {
+		green("Nothing to migrate or rollback")
+		os.Exit(0)
+	}
+
 	red(err.Error())
-	panic("tern terminated with error")
+	red("tern terminated with error")
+	os.Exit(1)
 }

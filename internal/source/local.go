@@ -2,8 +2,8 @@ package source
 
 import (
 	"context"
-	"github.com/denismitr/tern/internal/logger"
-	"github.com/denismitr/tern/migration"
+	"github.com/denismitr/tern/v2/internal/logger"
+	"github.com/denismitr/tern/v2/migration"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
@@ -33,25 +33,33 @@ const (
 	anyBasedNameFormat = `^\d{9,14}_(?P<name>\w+[\w_-]+)?$`
 )
 
+var ErrMigrationAlreadyExists = errors.New("migration already exists")
+
 type ParsingRules func() (*regexp.Regexp, *regexp.Regexp, error)
 
 type LocalFileSource struct {
-	folder string
-	lg logger.Logger
+	folder        string
+	lg            logger.Logger
 	versionRegexp *regexp.Regexp
-	nameRegexp *regexp.Regexp
+	nameRegexp    *regexp.Regexp
+	versionFormat migration.VersionFormat
 }
 
 func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
-	key := migration.CreateKeyFromTimestampAndName(dt, name)
-	migrateFilename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
+	key := migration.CreateKeyFromVersionAndName(dt, name)
+	migrateFilename := filepath.Join(lfs.folder, key + defaultMigrateFileFullExtension)
+
+	if lfs.AlreadyExists(dt, name) {
+		return nil, errors.Wrapf(ErrMigrationAlreadyExists, "migration %s with key already exists", key)
+	}
+
 	mf, err := os.Create(migrateFilename)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not create file [%s]", migrateFilename)
 	}
 
-	if err := mf.Close(); err != nil {
-		return nil, err
+	if cErr := mf.Close(); cErr != nil {
+		return nil, errors.Wrapf(cErr, "could not close file %s", migrateFilename)
 	}
 
 	m := &migration.Migration{
@@ -59,18 +67,19 @@ func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migrati
 		Name: name,
 		Version: migration.Version{
 			Value: dt,
+			Format: lfs.versionFormat,
 		},
 	}
 
 	if withRollback {
-		rollbackFilename := filepath.Join(lfs.folder, key +defaultRollbackFileFullExtension)
+		rollbackFilename := filepath.Join(lfs.folder, key + defaultRollbackFileFullExtension)
 		rf, err := os.Create(rollbackFilename)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not create file [%s]", rollbackFilename)
 		}
 
-		if err := rf.Close(); err != nil {
-			return nil, err
+		if cErr := rf.Close(); cErr != nil {
+			return nil, errors.Wrapf(cErr, "could not close file %s", rollbackFilename)
 		}
 	}
 
@@ -91,6 +100,7 @@ func NewLocalFSSource(
 		folder: folder,
 		versionRegexp: versionRegexp,
 		nameRegexp: nameRegexp,
+		versionFormat: vf,
 		lg: lg,
 	}, nil
 }
@@ -105,7 +115,7 @@ func (lfs *LocalFileSource) IsValid() bool {
 }
 
 func (lfs *LocalFileSource) AlreadyExists(dt, name string) bool {
-	key := migration.CreateKeyFromTimestampAndName(dt, name)
+	key := migration.CreateKeyFromVersionAndName(dt, name)
 	filename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
@@ -143,7 +153,7 @@ func LocalFSParsingRules(vf migration.VersionFormat) (*regexp.Regexp, *regexp.Re
 }
 
 func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Migrations, error) {
-	keys, err := lfs.getAllKeysFromFolder(f.Keys)
+	keys, err := lfs.getAllVersionsFromFolder(f)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +208,13 @@ func (lfs *LocalFileSource) Select(ctx context.Context, f Filter) (migration.Mig
 	}
 }
 
-func (lfs *LocalFileSource) getAllKeysFromFolder(onlyKeys []string) (map[string]int, error) {
+func (lfs *LocalFileSource) getAllVersionsFromFolder(f Filter) (map[string]int, error) {
+	var onlyVersions []string
+
+	for _, v := range f.Versions {
+		onlyVersions = append(onlyVersions, v.Value)
+	}
+
 	files, err := ioutil.ReadDir(lfs.folder)
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not read keys from folder %s", lfs.folder)
@@ -216,7 +232,7 @@ func (lfs *LocalFileSource) getAllKeysFromFolder(onlyKeys []string) (map[string]
 			return nil, errors.Wrapf(err, "file %s is not a valid migration name", files[i].Name()) // fixme
 		}
 
-		if len(onlyKeys) > 0 && !inStringSlice(key, onlyKeys) {
+		if len(onlyVersions) > 0 && !keyContainsOfVersions(key, onlyVersions) {
 			continue
 		}
 
@@ -242,23 +258,38 @@ func (lfs *LocalFileSource) readOne(key string) (*migration.Migration, error) {
 		return nil, err
 	}
 
-	defer fUp.Close()
+	defer func() {
+		if cErr := fUp.Close(); cErr != nil {
+			lfs.lg.Error(cErr)
+		}
+	}()
 
 	fDown, err := os.Open(down)
 	if err != nil {
-		return nil, err
+		// rollback version may not be present
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	} else {
+		defer func() {
+			if cErr := fDown.Close(); cErr != nil {
+				lfs.lg.Error(cErr)
+			}
+		}()
 	}
-
-	defer fDown.Close()
 
 	migrateContents, err := ioutil.ReadAll(fUp);
 	if err != nil {
 		return nil, err
 	}
 
-	rollbackContents, err := ioutil.ReadAll(fDown);
-	if err != nil {
-		return nil, err
+	var rollbackContents []byte
+	if fDown != nil {
+		if contents, err := ioutil.ReadAll(fDown); err != nil {
+			return nil, err
+		} else {
+			rollbackContents = contents
+		}
 	}
 
 	return lfs.createMigration(key, migrateContents, rollbackContents)

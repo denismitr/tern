@@ -3,7 +3,7 @@ package sqlgateway
 import (
 	"context"
 	"database/sql"
-	"github.com/denismitr/tern/v2/internal/retry"
+	"github.com/denismitr/tern/v3/internal/retry"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -36,8 +36,8 @@ type SQLConnector interface {
 
 type RetryingConnector struct {
 	options *ConnectOptions
-	db *sql.DB
-	conn *sql.Conn
+	db      *sql.DB
+	conn    *sql.Conn
 }
 
 func (c RetryingConnector) Timeout() time.Duration {

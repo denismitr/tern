@@ -2,8 +2,8 @@ package sqlgateway
 
 import (
 	"fmt"
-	"github.com/denismitr/tern/v2/internal/database"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/internal/database"
+	"github.com/denismitr/tern/v3/migration"
 )
 
 type sqliteSchemaV1 struct {
@@ -23,7 +23,7 @@ func (s sqliteSchemaV1) initQuery() string {
 }
 
 func (s sqliteSchemaV1) insertQuery(m *migration.Migration) (string, []interface{}) {
-	const sqliteInsertVersionQuery   = "INSERT INTO %s (version, name) VALUES (?, ?);"
+	const sqliteInsertVersionQuery = "INSERT INTO %s (version, name) VALUES (?, ?);"
 	q := fmt.Sprintf(sqliteInsertVersionQuery, s.migrationsTable)
 	return q, []interface{}{m.Version.Value, m.Name}
 }

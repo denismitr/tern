@@ -1,4 +1,4 @@
-module github.com/denismitr/tern/v2
+module github.com/denismitr/tern/v3
 
 go 1.16
 

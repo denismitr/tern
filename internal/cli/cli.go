@@ -2,9 +2,9 @@ package cli
 
 import (
 	"context"
-	"github.com/denismitr/tern/v2"
-	"github.com/denismitr/tern/v2/internal/source"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3"
+	"github.com/denismitr/tern/v3/internal/source"
+	"github.com/denismitr/tern/v3/migration"
 	"github.com/pkg/errors"
 	"io"
 	"os"

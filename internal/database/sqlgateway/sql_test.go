@@ -1,7 +1,7 @@
 package sqlgateway
 
 import (
-	"github.com/denismitr/tern/v2/internal/database"
+	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -26,7 +26,7 @@ func TestNewSqliteGateway(t *testing.T) {
 		connector := RetryingConnector{}
 		g, closer := NewSqliteGateway(&connector, &SqliteOptions{
 			database.CommonOptions{
-				MigrationsTable: "foo",
+				MigrationsTable:  "foo",
 				MigratedAtColumn: "created_at",
 			},
 		})
@@ -61,7 +61,7 @@ func TestNewMySQLGateway(t *testing.T) {
 		connector := RetryingConnector{}
 		g, closer := NewMySQLGateway(&connector, &MySQLOptions{
 			CommonOptions: database.CommonOptions{
-				MigrationsTable: "foo",
+				MigrationsTable:  "foo",
 				MigratedAtColumn: "created_at",
 			},
 			LockKey: "foobar",

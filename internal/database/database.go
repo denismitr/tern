@@ -2,8 +2,8 @@ package database
 
 import (
 	"context"
-	"github.com/denismitr/tern/v2/internal/logger"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/internal/logger"
+	"github.com/denismitr/tern/v3/migration"
 	"github.com/pkg/errors"
 )
 
@@ -21,12 +21,12 @@ const (
 )
 
 type CommonOptions struct {
-	MigrationsTable   string
-	MigratedAtColumn  string
+	MigrationsTable  string
+	MigratedAtColumn string
 }
 
 type Plan struct {
-	Steps int
+	Steps    int
 	Versions []migration.Version
 }
 
@@ -38,11 +38,11 @@ type versionController interface {
 	CreateMigrationsTable(ctx context.Context) error
 }
 
-type Gateway interface {
+type DB interface {
 	SetLogger(logger.Logger)
 	Migrate(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
 	Rollback(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, error)
-	Refresh(ctx context.Context, migrations migration.Migrations, plan Plan) (migration.Migrations, migration.Migrations, error)
+	Refresh(ctx context.Context, migrations migration.Migrations, p Plan) (migration.Migrations, migration.Migrations, error)
 	Connect() error
 
 	versionController
@@ -58,7 +58,7 @@ func ScheduleForRollback(
 	var scheduled migration.Migrations
 
 	for i := len(migrations) - 1; i >= 0; i-- {
-		if len(p.Versions) > 0 && ! migration.InVersions(migrations[i].Version, p.Versions) {
+		if len(p.Versions) > 0 && !migration.InVersions(migrations[i].Version, p.Versions) {
 			continue
 		}
 
@@ -103,7 +103,7 @@ func ScheduleForRefresh(
 ) migration.Migrations {
 	var scheduled migration.Migrations
 	for i := len(migrations) - 1; i >= 0; i-- {
-		if len(p.Versions) > 0 && ! migration.InVersions(migrations[i].Version, p.Versions) {
+		if len(p.Versions) > 0 && !migration.InVersions(migrations[i].Version, p.Versions) {
 			continue
 		}
 

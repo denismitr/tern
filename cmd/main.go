@@ -4,9 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/denismitr/tern/v2"
-	"github.com/denismitr/tern/v2/internal/cli"
-	"github.com/denismitr/tern/v2/internal/database"
+	"github.com/denismitr/tern/v3"
+	"github.com/denismitr/tern/v3/internal/cli"
+	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/logrusorgru/aurora/v3"
 	"github.com/pkg/errors"
 	"os"
@@ -160,12 +160,12 @@ func createConfigFile(filename string) {
 }
 
 func green(s string, f ...interface{}) {
-	fmt.Printf(aurora.Green("tern-cli: ").String() + s, f...)
+	fmt.Printf(aurora.Green("tern-cli: ").String()+s, f...)
 	fmt.Println()
 }
 
 func red(s string, f ...interface{}) {
-	fmt.Printf(aurora.Red("tern-cli: ").String() + s, f...)
+	fmt.Printf(aurora.Red("tern-cli: ").String()+s, f...)
 	fmt.Println()
 }
 

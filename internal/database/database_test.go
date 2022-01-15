@@ -1,7 +1,7 @@
 package database
 
 import (
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/migration"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"

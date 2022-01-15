@@ -2,12 +2,12 @@ package tern
 
 import (
 	"database/sql"
-	"github.com/denismitr/tern/v2/internal/database"
-	"github.com/denismitr/tern/v2/internal/database/sqlgateway"
+	"github.com/denismitr/tern/v3/internal/database"
+	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
 	"time"
 )
 
-type MySQLOptionFunc  func(*sqlgateway.MySQLOptions, *sqlgateway.ConnectOptions)
+type MySQLOptionFunc func(*sqlgateway.MySQLOptions, *sqlgateway.ConnectOptions)
 
 func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 	return func(m *Migrator) error {
@@ -30,12 +30,11 @@ func UseMySQL(db *sql.DB, options ...MySQLOptionFunc) OptionFunc {
 		gateway, closer := sqlgateway.NewMySQLGateway(connector, mysqlOpts)
 
 		m.closerFns = append(m.closerFns, CloserFunc(closer))
-		m.gateway = gateway
+		m.db = gateway
 
 		return nil
 	}
 }
-
 
 func WithMySQLNoLock() MySQLOptionFunc {
 	return func(mysqlOpts *sqlgateway.MySQLOptions, connectOpts *sqlgateway.ConnectOptions) {

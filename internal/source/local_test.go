@@ -3,8 +3,8 @@ package source
 import (
 	"context"
 	"fmt"
-	"github.com/denismitr/tern/v2/internal/logger"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/internal/logger"
+	"github.com/denismitr/tern/v3/migration"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,7 +46,7 @@ func Test_ConvertLocalFolder(t *testing.T) {
 	assert.NoError(t, err)
 
 	t.Run("all migrations can be read from local folder", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
 		migrations, err := c.Select(ctx, Filter{})
@@ -74,7 +74,7 @@ func Test_ConvertLocalFolder(t *testing.T) {
 	})
 
 	t.Run("specified migrations can be read from local folder", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 1 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
 		migrations, err := c.Select(
@@ -114,7 +114,7 @@ func Test_VersionCanBeExtractedFromKey(t *testing.T) {
 	}
 
 	invalid := []struct {
-		in string
+		in  string
 		err error
 	}{
 		{in: "M1596897167_create_foo_table", err: ErrInvalidTimestamp},
@@ -188,8 +188,8 @@ func Test_MigrationNameCanBeExtractedFromKey(t *testing.T) {
 func Test_ConvertPathToKey(t *testing.T) {
 	t.Parallel()
 
-	valid := []struct{
-		in string
+	valid := []struct {
+		in  string
 		out string
 	}{
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_bar_table.migrate.sql", out: "1596897188_create_bar_table"},
@@ -198,8 +198,8 @@ func Test_ConvertPathToKey(t *testing.T) {
 		{in: "./1596897188_create_foo_table.rollback.sql", out: "1596897188_create_foo_table"},
 	}
 
-	invalid := []struct{
-		in string
+	invalid := []struct {
+		in  string
 		err error
 	}{
 		{in: "/home/vagrant/code/migrations/mysql/1596897188_create_bar_table.sql", err: ErrNotAMigrationFile},

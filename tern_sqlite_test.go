@@ -2,8 +2,8 @@ package tern
 
 import (
 	"context"
-	"github.com/denismitr/tern/v2/internal/database"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/internal/database"
+	"github.com/denismitr/tern/v3/migration"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
@@ -49,7 +49,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -110,7 +110,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 	})
 
 	t.Run("it_will_skip_migrations_that_are_already_in_migrations_table", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
@@ -180,7 +180,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 	})
 
 	t.Run("it_will_run_no_migrations_if_all_available_versions_are_in_migrations_table", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		m, closer, err := NewMigrator(UseSqlite(db.DB), UseLocalFolderSource(sqliteMigrationsFolder))
@@ -200,9 +200,9 @@ func Test_Tern_WithSqlite(t *testing.T) {
 
 		// given we have already migrated these 2 migrations
 		existingMigrations, err := migration.NewMigrations(
-			migration.NewMigrationFromDB("1596897167", time.Now().Add(-2 * time.Hour), "Create foo table"),
-			migration.NewMigrationFromDB("1596897188", time.Now().Add(-2 * time.Hour), "Create bar table"),
-			migration.NewMigrationFromDB("1597897177", time.Now().Add(-2 * time.Hour), "Create baz table"),
+			migration.NewMigrationFromDB("1596897167", time.Now().Add(-2*time.Hour), "Create foo table"),
+			migration.NewMigrationFromDB("1596897188", time.Now().Add(-2*time.Hour), "Create bar table"),
+			migration.NewMigrationFromDB("1597897177", time.Now().Add(-2*time.Hour), "Create baz table"),
 		)
 
 		if err != nil {
@@ -263,7 +263,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		keys, err := m.Migrate(ctx, WithSteps(1))
@@ -314,7 +314,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		keys, err := m.Migrate(ctx, WithVersions(migration.Version{Value: "1596897188"}))
@@ -359,7 +359,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		_, err = m.Migrate(ctx)
@@ -415,7 +415,7 @@ func Test_Tern_WithSqlite(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -461,7 +461,6 @@ func Test_Tern_WithSqlite(t *testing.T) {
 	})
 }
 
-
 func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 	db, err := sqlx.Open("sqlite3", sqliteConnection)
 	if err != nil {
@@ -499,7 +498,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -591,7 +590,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -678,7 +677,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 				db.DB,
 				WithSqliteMigrationTable("migration_versions"),
 				WithSqliteMaxConnectionAttempts(10),
-				WithSqliteConnectionTimeout(3 * time.Second),
+				WithSqliteConnectionTimeout(3*time.Second),
 			),
 			source,
 		)
@@ -689,7 +688,7 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -749,5 +748,3 @@ func Test_InMemorySourceMigrations_Sqlite(t *testing.T) {
 		}
 	})
 }
-
-

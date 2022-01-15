@@ -3,9 +3,9 @@ package sqlgateway
 import (
 	"context"
 	"database/sql"
-	"github.com/denismitr/tern/v2/internal/database"
-	"github.com/denismitr/tern/v2/internal/logger"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/internal/database"
+	"github.com/denismitr/tern/v3/internal/logger"
+	"github.com/denismitr/tern/v3/migration"
 	"github.com/pkg/errors"
 	"time"
 )
@@ -28,7 +28,7 @@ type SQLGateway struct {
 	schema    schema
 }
 
-var _ database.Gateway = (*SQLGateway)(nil)
+var _ database.DB = (*SQLGateway)(nil)
 
 // NewMySQLGateway - creates a new MySQL gateway and uses the SQLConnector interface to attempt to
 // Connect to the MySQL database

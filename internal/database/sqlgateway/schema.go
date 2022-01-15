@@ -1,11 +1,11 @@
 package sqlgateway
 
 import (
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/migration"
 )
 
 const (
-	ASC = "ASC"
+	ASC  = "ASC"
 	DESC = "DESC"
 )
 
@@ -22,5 +22,3 @@ type schema interface {
 	showTablesQuery() string
 	readVersionsQuery(f readVersionsFilter) string
 }
-
-

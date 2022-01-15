@@ -1,7 +1,7 @@
 package tern
 
 import (
-	"github.com/denismitr/tern/v2/internal/logger"
+	"github.com/denismitr/tern/v3/internal/logger"
 )
 
 func UseColorLogger(p logger.Printer, printSql, printDebug bool) OptionFunc {
@@ -17,5 +17,3 @@ func UseLogger(p logger.Printer, printSql, printDebug bool) OptionFunc {
 		return nil
 	}
 }
-
-

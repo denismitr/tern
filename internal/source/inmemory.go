@@ -2,7 +2,7 @@ package source
 
 import (
 	"context"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/migration"
 	"github.com/pkg/errors"
 )
 

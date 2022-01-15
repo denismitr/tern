@@ -1,6 +1,6 @@
 package tern
 
-import "github.com/denismitr/tern/v2/migration"
+import "github.com/denismitr/tern/v3/migration"
 
 type OptionFunc func(*Migrator) error
 type ActionConfigurator func(a *Action)
@@ -42,4 +42,3 @@ func CreateConfigurators(steps int, versionStrings []string) ([]ActionConfigurat
 
 	return configurators, nil
 }
-

@@ -2,7 +2,7 @@ package tern
 
 import (
 	"database/sql"
-	"github.com/denismitr/tern/v2/internal/database/sqlgateway"
+	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -14,7 +14,7 @@ func TestUseMySQL(t *testing.T) {
 	t.Run("default mysql options", func(t *testing.T) {
 		m := Migrator{}
 		checkerRuns := 0
-		checker :=  func(mysqlOpts *sqlgateway.MySQLOptions, cOpts *sqlgateway.ConnectOptions) {
+		checker := func(mysqlOpts *sqlgateway.MySQLOptions, cOpts *sqlgateway.ConnectOptions) {
 			assert.Equal(t, "migrations", mysqlOpts.MigrationsTable)
 			assert.Equal(t, "tern_migrations", mysqlOpts.LockKey)
 			assert.Equal(t, 3, mysqlOpts.LockFor)
@@ -33,7 +33,7 @@ func TestUseMySQL(t *testing.T) {
 		m := Migrator{}
 
 		checkerRuns := 0
-		checker :=  func(mysqlOpts *sqlgateway.MySQLOptions, cOpts *sqlgateway.ConnectOptions) {
+		checker := func(mysqlOpts *sqlgateway.MySQLOptions, cOpts *sqlgateway.ConnectOptions) {
 			assert.Equal(t, "migrations", mysqlOpts.MigrationsTable)
 			assert.Equal(t, "tern_migrations", mysqlOpts.LockKey)
 			assert.Equal(t, 3, mysqlOpts.LockFor)
@@ -52,7 +52,7 @@ func TestUseMySQL(t *testing.T) {
 		m := Migrator{}
 
 		checkerRuns := 0
-		checker :=  func(mysqlOpts *sqlgateway.MySQLOptions, cOpts *sqlgateway.ConnectOptions) {
+		checker := func(mysqlOpts *sqlgateway.MySQLOptions, cOpts *sqlgateway.ConnectOptions) {
 			assert.Equal(t, "versions", mysqlOpts.MigrationsTable)
 			assert.Equal(t, "created_at", mysqlOpts.MigratedAtColumn)
 			assert.Equal(t, "foo", mysqlOpts.LockKey)

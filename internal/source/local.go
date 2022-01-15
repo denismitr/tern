@@ -2,8 +2,8 @@ package source
 
 import (
 	"context"
-	"github.com/denismitr/tern/v2/internal/logger"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/internal/logger"
+	"github.com/denismitr/tern/v3/migration"
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"os"
@@ -25,12 +25,12 @@ const (
 	defaultRollbackFileFullExtension = ".rollback.sql"
 
 	timestampBasedVersionFormat = `^(?P<version>\d{9,11})(_\w+)?$`
-	timestampBasedNameFormat = `^\d{9,11}_(?P<name>\w+[\w_-]+)?$`
-	datetimeBasedVersionFormat = `^(?P<version>\d{14})(_\w+)?$`
-	datetimeBasedNameFormat = `^\d{14}_(?P<name>\w+[\w_-]+)?$`
+	timestampBasedNameFormat    = `^\d{9,11}_(?P<name>\w+[\w_-]+)?$`
+	datetimeBasedVersionFormat  = `^(?P<version>\d{14})(_\w+)?$`
+	datetimeBasedNameFormat     = `^\d{14}_(?P<name>\w+[\w_-]+)?$`
 
 	anyBasedVersionFormat = `^(?P<version>\d{9,14})(_\w+)?$`
-	anyBasedNameFormat = `^\d{9,14}_(?P<name>\w+[\w_-]+)?$`
+	anyBasedNameFormat    = `^\d{9,14}_(?P<name>\w+[\w_-]+)?$`
 )
 
 var ErrMigrationAlreadyExists = errors.New("migration already exists")
@@ -47,7 +47,7 @@ type LocalFileSource struct {
 
 func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migration.Migration, error) {
 	key := migration.CreateKeyFromVersionAndName(dt, name)
-	migrateFilename := filepath.Join(lfs.folder, key + defaultMigrateFileFullExtension)
+	migrateFilename := filepath.Join(lfs.folder, key+defaultMigrateFileFullExtension)
 
 	if lfs.AlreadyExists(dt, name) {
 		return nil, errors.Wrapf(ErrMigrationAlreadyExists, "migration %s with key already exists", key)
@@ -63,16 +63,16 @@ func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migrati
 	}
 
 	m := &migration.Migration{
-		Key: key,
+		Key:  key,
 		Name: name,
 		Version: migration.Version{
-			Value: dt,
+			Value:  dt,
 			Format: lfs.versionFormat,
 		},
 	}
 
 	if withRollback {
-		rollbackFilename := filepath.Join(lfs.folder, key + defaultRollbackFileFullExtension)
+		rollbackFilename := filepath.Join(lfs.folder, key+defaultRollbackFileFullExtension)
 		rf, err := os.Create(rollbackFilename)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not create file [%s]", rollbackFilename)
@@ -97,11 +97,11 @@ func NewLocalFSSource(
 	}
 
 	return &LocalFileSource{
-		folder: folder,
+		folder:        folder,
 		versionRegexp: versionRegexp,
-		nameRegexp: nameRegexp,
+		nameRegexp:    nameRegexp,
 		versionFormat: vf,
-		lg: lg,
+		lg:            lg,
 	}, nil
 }
 
@@ -116,7 +116,7 @@ func (lfs *LocalFileSource) IsValid() bool {
 
 func (lfs *LocalFileSource) AlreadyExists(dt, name string) bool {
 	key := migration.CreateKeyFromVersionAndName(dt, name)
-	filename := filepath.Join(lfs.folder, key +defaultMigrateFileFullExtension)
+	filename := filepath.Join(lfs.folder, key+defaultMigrateFileFullExtension)
 	info, err := os.Stat(filename)
 	if os.IsNotExist(err) {
 		return false
@@ -278,7 +278,7 @@ func (lfs *LocalFileSource) readOne(key string) (*migration.Migration, error) {
 		}()
 	}
 
-	migrateContents, err := ioutil.ReadAll(fUp);
+	migrateContents, err := ioutil.ReadAll(fUp)
 	if err != nil {
 		return nil, err
 	}

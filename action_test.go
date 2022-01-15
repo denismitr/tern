@@ -1,7 +1,7 @@
 package tern
 
 import (
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/migration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -9,32 +9,32 @@ import (
 
 func Test_createConfigurators(t *testing.T) {
 	tt := []struct {
-		name     string
+		name                  string
 		expectedConfigurators int
-		steps    int
-		versions []string
+		steps                 int
+		versions              []string
 	}{
 		{
-			name: "zero values",
+			name:                  "zero values",
 			expectedConfigurators: 0,
 		},
 		{
-			name: "both params",
+			name:                  "both params",
 			expectedConfigurators: 2,
-			steps: 3,
-			versions: []string{"1234567890", "1234567899"},
+			steps:                 3,
+			versions:              []string{"1234567890", "1234567899"},
 		},
 		{
-			name: "only versions",
+			name:                  "only versions",
 			expectedConfigurators: 1,
-			steps: 0,
-			versions: []string{"1234567890", "1234567899"},
+			steps:                 0,
+			versions:              []string{"1234567890", "1234567899"},
 		},
 		{
-			name: "only steps",
+			name:                  "only steps",
 			expectedConfigurators: 1,
-			steps: 4,
-			versions: []string{},
+			steps:                 4,
+			versions:              []string{},
 		},
 	}
 

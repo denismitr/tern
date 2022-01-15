@@ -2,7 +2,7 @@ package sqlgateway
 
 import (
 	"fmt"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/migration"
 )
 
 type mysqlSchemaV1 struct {

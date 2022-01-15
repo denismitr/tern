@@ -2,8 +2,8 @@ package tern
 
 import (
 	"database/sql"
-	"github.com/denismitr/tern/v2/internal/database"
-	"github.com/denismitr/tern/v2/internal/database/sqlgateway"
+	"github.com/denismitr/tern/v3/internal/database"
+	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
 	"time"
 )
 
@@ -27,7 +27,7 @@ func UseSqlite(db *sql.DB, options ...SqliteOptionFunc) OptionFunc {
 		connector := sqlgateway.MakeRetryingConnector(db, connectOpts)
 		gateway, closer := sqlgateway.NewSqliteGateway(connector, sqliteOpts)
 
-		m.gateway = gateway
+		m.db = gateway
 		m.closerFns = append(m.closerFns, CloserFunc(closer))
 
 		return nil

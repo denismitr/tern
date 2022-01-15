@@ -144,8 +144,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"github.com/denismitr/tern/v2"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3"
+	"github.com/denismitr/tern/v3/migration"
 	"database/sql"
 	"github.com/pkg/errors"
 )

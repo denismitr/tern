@@ -2,8 +2,8 @@ package tern
 
 import (
 	"context"
-	"github.com/denismitr/tern/v2/internal/database"
-	"github.com/denismitr/tern/v2/migration"
+	"github.com/denismitr/tern/v3/internal/database"
+	"github.com/denismitr/tern/v3/migration"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
@@ -52,7 +52,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -123,7 +123,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -184,7 +184,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_will_skip_migrations_that_are_already_in_migrations_table", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlTimestampsMigrationsFolder))
@@ -254,7 +254,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 
 	t.Run("it_will_run_no_migrations_if_all_available_versions_are_in_migrations_table", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		m, closer, err := NewMigrator(UseMySQL(db.DB), UseLocalFolderSource(mysqlTimestampsMigrationsFolder))
@@ -274,9 +274,9 @@ func Test_Tern_WithMySQL(t *testing.T) {
 
 		// given we have already migrated these 2 migrations
 		existingMigrations, err := migration.NewMigrations(
-			migration.NewMigrationFromDB("1596897167", time.Now().Add(-2 * time.Hour), "Create foo table"),
-			migration.NewMigrationFromDB("1596897188", time.Now().Add(-2 * time.Hour), "Create bar table"),
-			migration.NewMigrationFromDB("1597897177", time.Now().Add(-2 * time.Hour), "Create baz table"),
+			migration.NewMigrationFromDB("1596897167", time.Now().Add(-2*time.Hour), "Create foo table"),
+			migration.NewMigrationFromDB("1596897188", time.Now().Add(-2*time.Hour), "Create bar table"),
+			migration.NewMigrationFromDB("1597897177", time.Now().Add(-2*time.Hour), "Create baz table"),
 		)
 
 		if err != nil {
@@ -337,7 +337,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		migrated, err := m.Migrate(ctx)
@@ -370,13 +370,12 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		keys, err := m.Migrate(ctx, WithSteps(1))
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
-
 
 		versions, err := m.dbGateway().ReadVersions(ctx)
 		if err != nil {
@@ -422,7 +421,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		keys, err := m.Migrate(ctx, WithVersions(migration.Version{Value: "1596897188"}))
@@ -467,7 +466,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		_, err = m.Migrate(ctx)
@@ -523,7 +522,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -569,7 +568,6 @@ func Test_Tern_WithMySQL(t *testing.T) {
 	})
 }
 
-
 func TestInMemorySourceMigrations(t *testing.T) {
 	db, err := sqlx.Open("mysql", mysqlConnection)
 	if err != nil {
@@ -607,7 +605,7 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -699,7 +697,7 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -786,7 +784,7 @@ func TestInMemorySourceMigrations(t *testing.T) {
 				db.DB,
 				WithMySQLMigrationTable("migration_versions"),
 				WithMySQLMaxConnectionAttempts(10),
-				WithMySQLConnectionTimeout(3 * time.Second),
+				WithMySQLConnectionTimeout(3*time.Second),
 				WithMySQLLockFor(10),
 				WithMySQLLockKey("migrator"),
 			),
@@ -799,7 +797,7 @@ func TestInMemorySourceMigrations(t *testing.T) {
 			assert.NoError(t, closer())
 		}()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 20 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
 		// DO: clean up
@@ -859,5 +857,3 @@ func TestInMemorySourceMigrations(t *testing.T) {
 		}
 	})
 }
-
-

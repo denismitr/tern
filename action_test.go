@@ -67,7 +67,7 @@ func Test_action(t *testing.T) {
 		a := Action{}
 
 		WithSteps(3)(&a)
-		WithVersions(migration.Version{Value: "00000000000001"}, migration.Version{Value: "00000000000002"})(&a)
+		WithVersions(migration.Order{Value: "00000000000001"}, migration.Order{Value: "00000000000002"})(&a)
 
 		assert.Equal(t, 3, a.steps)
 		require.Len(t, a.versions, 2)

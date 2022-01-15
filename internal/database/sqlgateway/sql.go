@@ -16,7 +16,6 @@ type SQLGateway struct {
 	locker    Locker
 	lg        logger.Logger
 	conn      *sql.Conn
-	connector SQLConnector
 	schema    StateManager
 }
 
@@ -24,22 +23,25 @@ var _ database.DB = (*SQLGateway)(nil)
 
 // NewMySQLGateway - creates a new MySQL gateway and uses the SQLConnector interface to attempt to
 // Connect to the MySQL database
-func NewMySQLGateway(connector SQLConnector, options *mysql.Options) (*SQLGateway, database.ConnCloser) {
+func NewMySQLGateway(
+	conn *sql.Conn,
+	migrationsTable string,
+	lockKey string,
+	lockFor int,
+	noLock bool,
+	charset string,
+) *SQLGateway {
 	gateway := SQLGateway{}
-	gateway.connector = connector
-	gateway.locker = mysql.NewLocker(options.LockKey, options.LockFor, options.NoLock)
+	gateway.conn = conn
+	gateway.locker = mysql.NewLocker(lockKey, lockFor, noLock)
 
-	if options.MigrationsTable == "" {
-		options.MigrationsTable = database.DefaultMigrationsTable
+	if migrationsTable == "" {
+		migrationsTable = database.DefaultMigrationsTable
 	}
 
-	if options.MigratedAtColumn == "" {
-		options.MigratedAtColumn = database.MigratedAtColumn
-	}
+	gateway.schema = mysql.NewStateManager(migrationsTable, charset)
 
-	gateway.schema = mysql.NewStateManager(options.MigrationsTable, options.MigratedAtColumn, "utf8")
-
-	return &gateway, connector.Close
+	return &gateway
 }
 
 // NewSqliteGateway - creates a new SQL gateway
@@ -52,11 +54,7 @@ func NewSqliteGateway(connector SQLConnector, options *sqlite.Options) (*SQLGate
 		options.MigrationsTable = database.DefaultMigrationsTable
 	}
 
-	if options.MigratedAtColumn == "" {
-		options.MigratedAtColumn = database.MigratedAtColumn
-	}
-
-	gateway.schema = sqlite.NewStateManager(options.MigrationsTable, options.MigratedAtColumn)
+	gateway.schema = sqlite.NewStateManager(options.MigrationsTable)
 
 	return &gateway, connector.Close
 }
@@ -88,7 +86,7 @@ func (g *SQLGateway) Migrate(
 	p database.Plan) (migration.Migrations, error) {
 	var migrated migration.Migrations
 
-	f := func(tx *sql.Tx, migratedVersions []migration.Version) error {
+	f := func(tx *sql.Tx, migratedVersions []migration.Order) error {
 		scheduled := database.ScheduleForMigration(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
@@ -102,7 +100,7 @@ func (g *SQLGateway) Migrate(
 
 			g.lg.Successf(
 				"migrated: version: %d batch: %d name: %s",
-				scheduled[i].Version, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Batch, scheduled[i].Name,
 			)
 
 			migrated = append(migrated, scheduled[i])
@@ -125,7 +123,7 @@ func (g *SQLGateway) Rollback(
 ) (migration.Migrations, error) {
 	var rolledBack migration.Migrations
 
-	f := func(tx *sql.Tx, migratedVersions []migration.Version) error {
+	f := func(tx *sql.Tx, migratedVersions []migration.Order) error {
 		scheduled := database.ScheduleForRollback(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
@@ -135,7 +133,7 @@ func (g *SQLGateway) Rollback(
 		for i := range scheduled {
 			g.lg.Debugf(
 				"rolling back version: %d, batch %d, name %s",
-				scheduled[i].Version, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Batch, scheduled[i].Name,
 			)
 
 			if err := g.rollbackOne(ctx, tx, scheduled[i]); err != nil {
@@ -144,7 +142,7 @@ func (g *SQLGateway) Rollback(
 
 			g.lg.Successf(
 				"rolled back version: %d, batch %d, name %s",
-				scheduled[i].Version, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Batch, scheduled[i].Name,
 			)
 
 			rolledBack = append(rolledBack, scheduled[i])
@@ -168,7 +166,7 @@ func (g *SQLGateway) Refresh(
 	var rolledBack migration.Migrations
 	var migrated migration.Migrations
 
-	f := func(tx *sql.Tx, migratedVersions []migration.Version) error {
+	f := func(tx *sql.Tx, migratedVersions []migration.Order) error {
 		scheduled := database.ScheduleForRefresh(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
@@ -178,7 +176,7 @@ func (g *SQLGateway) Refresh(
 		for i := range scheduled {
 			g.lg.Debugf(
 				"rolling back version: %d, batch %d, name %s",
-				scheduled[i].Version, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Version.Batch, scheduled[i].Version.Name,
 			)
 
 			if err := g.rollbackOne(ctx, tx, scheduled[i]); err != nil {
@@ -223,7 +221,7 @@ func (g *SQLGateway) ReadVersions(ctx context.Context) ([]migration.Version, err
 		return nil, err
 	}
 
-	result, err := g.readVersionsUnderTx(tx, ReadVersionsFilter{Sort: ASC})
+	result, err := g.readVersionsUnderTx(tx, database.ReadVersionsFilter{Sort: ASC})
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +346,7 @@ func (g *SQLGateway) execUnderLock(
 		return g.handleError(ctx, err, nil)
 	}
 
-	availableVersions, err := g.readVersionsUnderTx(tx, ReadVersionsFilter{Sort: ASC})
+	availableVersions, err := g.readVersionsUnderTx(tx, database.ReadVersionsFilter{Sort: ASC})
 	if err != nil {
 		if errors.Is(err, database.ErrNoChangesRequired) {
 			return g.handleError(ctx, err, tx)
@@ -374,7 +372,7 @@ func (g *SQLGateway) execUnderLock(
 }
 
 func (g *SQLGateway) migrateOne(ctx context.Context, ex CtxExecutor, m *migration.Migration) error {
-	if m.Version == 0 {
+	if m.Version.Order == 0 {
 		return database.ErrMigrationVersionNotSpecified
 	}
 
@@ -390,7 +388,7 @@ func (g *SQLGateway) migrateOne(ctx context.Context, ex CtxExecutor, m *migratio
 				return errors.Wrapf(
 					err,
 					"could not migrate script [%s], migration version: %d, batch %d, name %s",
-					script, m.Version, m.Batch, m.Name)
+					script, m.Version.Order, m.Version.Batch, m.Version.Name)
 			}
 		}
 	}
@@ -401,7 +399,7 @@ func (g *SQLGateway) migrateOne(ctx context.Context, ex CtxExecutor, m *migratio
 		return errors.Wrapf(
 			err,
 			"could not insert migration version: %d, batch %d, name %s",
-			m.Version, m.Batch, m.Name,
+			m.Version.Order, m.Version.Batch, m.Version.Name,
 		)
 	}
 
@@ -409,7 +407,7 @@ func (g *SQLGateway) migrateOne(ctx context.Context, ex CtxExecutor, m *migratio
 }
 
 func (g *SQLGateway) rollbackOne(ctx context.Context, ex CtxExecutor, m *migration.Migration) error {
-	if m.Version == 0 {
+	if m.Version.Order == 0 {
 		return database.ErrMigrationVersionNotSpecified
 	}
 
@@ -425,7 +423,7 @@ func (g *SQLGateway) rollbackOne(ctx context.Context, ex CtxExecutor, m *migrati
 				return errors.Wrapf(
 					err,
 					"could not rollback script [%s], migration version: %d, batch %d, name %s",
-					script, m.Version, m.Batch, m.Name,
+					script, m.Version.Order, m.Version.Batch, m.Version.Name,
 				)
 			}
 		}
@@ -437,14 +435,14 @@ func (g *SQLGateway) rollbackOne(ctx context.Context, ex CtxExecutor, m *migrati
 		return errors.Wrapf(
 			err,
 			"could not remove migration version: %d, batch %d, name %s",
-			m.Version, m.Batch, m.Name,
+			m.Version.Order, m.Version.Batch, m.Version.Name,
 		)
 	}
 
 	return nil
 }
 
-func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f ReadVersionsFilter) ([]migration.Version, error) {
+func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f database.ReadVersionsFilter) ([]migration.Version, error) {
 	q, err := g.schema.ReadVersionsQuery(f)
 	if err != nil {
 		return nil, err
@@ -476,9 +474,11 @@ func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f ReadVersionsFilter) ([]mi
 			}
 		}
 
-		var timestamp string
+		var order migration.Order
+		var batch migration.Batch
+		var name string
 		var migratedAt time.Time
-		if err := rows.Scan(&timestamp, &migratedAt); err != nil {
+		if err := rows.Scan(&order, &batch, &name, &migratedAt); err != nil {
 			if closeErr := rows.Close(); closeErr != nil {
 				g.lg.Error(closeErr)
 			}
@@ -486,7 +486,12 @@ func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f ReadVersionsFilter) ([]mi
 			return result, err
 		}
 
-		result = append(result, migration.Version{Value: timestamp, MigratedAt: migratedAt})
+		result = append(result, migration.Version{
+			Order:      order,
+			Batch:      batch,
+			Name:       name,
+			MigratedAt: migratedAt,
+		})
 	}
 
 	return result, nil

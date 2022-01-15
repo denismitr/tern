@@ -9,37 +9,42 @@ import (
 )
 
 type StateManager struct {
-	migrationsTable, migratedAtColumn, charset string
+	migrationsTable, charset string
 }
 
 var _ sqlgateway.StateManager = (*StateManager)(nil)
 
-func NewStateManager(migrationsTable, migratedAtColumn, charset string) *StateManager {
-	return &StateManager{migrationsTable: migrationsTable, migratedAtColumn: migratedAtColumn, charset: charset}
+func NewStateManager(migrationsTable, charset string) *StateManager {
+	return &StateManager{migrationsTable: migrationsTable, charset: charset}
 }
 
 func (s StateManager) InitQuery() string {
 	const createSQL = `
 		CREATE TABLE IF NOT EXISTS %s (
-			version BIGINT PRIMARY KEY,
+			order BIGINT PRIMARY KEY,
 			batch BIGINT,
 			name VARCHAR(120),
-			%s TIMESTAMP default CURRENT_TIMESTAMP
+			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
 		) ENGINE=InnoDB CHARACTER SET=%s
 	`
 
-	return fmt.Sprintf(createSQL, s.migrationsTable, s.migratedAtColumn, s.charset)
+	return fmt.Sprintf(createSQL, s.migrationsTable, s.charset)
 }
 
 func (s StateManager) InsertQuery(m *migration.Migration) (string, []interface{}, error) {
-	const insertSQL = "INSERT INTO %s (`version`, `batch`, `name`) VALUES (?, ?);"
+	const insertSQL = "INSERT INTO %s (`order`, `batch`, `name`, `migrated_at`) VALUES (?, ?, ?, ?);"
 
 	// TODO: validation
-	return fmt.Sprintf(insertSQL, s.migrationsTable), []interface{}{m.Version, m.Batch, m.Name}, nil
+	return fmt.Sprintf(insertSQL, s.migrationsTable), []interface{}{
+		m.Version,
+		m.Version.Batch,
+		m.Version.Name,
+		m.Version.MigratedAt,
+	}, nil
 }
 
 func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
-	var readSQL = "SELECT `version`, `%s` FROM %s"
+	var readSQL = "SELECT `order`, `name`, `batch`, `migrated_at` FROM %s"
 
 	// TODO: optimize with bytes.Buffer
 
@@ -52,16 +57,16 @@ func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, 
 	}
 
 	if f.Sort == database.DESC {
-		readSQL += " ORDER BY `version` DESC"
+		readSQL += " ORDER BY `order` DESC"
 	} else {
-		readSQL += " ORDER BY `version` ASC"
+		readSQL += " ORDER BY `order` ASC"
 	}
 
-	return fmt.Sprintf(readSQL, s.migratedAtColumn, s.migrationsTable), nil
+	return fmt.Sprintf(readSQL, s.migrationsTable), nil
 }
 
 func (s StateManager) RemoveQuery(m *migration.Migration) (string, []interface{}, error) {
-	const removeSQL = "DELETE FROM %s WHERE `version` = ?;"
+	const removeSQL = "DELETE FROM %s WHERE `order` = ?;"
 	// TODO: validation
 	return fmt.Sprintf(removeSQL, s.migrationsTable), []interface{}{m.Version}, nil
 }

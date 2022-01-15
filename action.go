@@ -7,7 +7,7 @@ type ActionConfigurator func(a *Action)
 
 type Action struct {
 	steps    int
-	versions []migration.Version
+	versions []migration.Order
 }
 
 func WithSteps(steps int) ActionConfigurator {
@@ -16,7 +16,7 @@ func WithSteps(steps int) ActionConfigurator {
 	}
 }
 
-func WithVersions(versions ...migration.Version) ActionConfigurator {
+func WithVersions(versions ...migration.Order) ActionConfigurator {
 	return func(a *Action) {
 		a.versions = versions
 	}
@@ -29,7 +29,7 @@ func CreateConfigurators(steps int, versionStrings []string) ([]ActionConfigurat
 	}
 
 	if len(versionStrings) > 0 {
-		var versions []migration.Version
+		var versions []migration.Order
 		for _, s := range versionStrings {
 			if v, err := migration.VersionFromString(s); err != nil {
 				return nil, err

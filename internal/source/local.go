@@ -65,7 +65,7 @@ func (lfs *LocalFileSource) Create(dt, name string, withRollback bool) (*migrati
 	m := &migration.Migration{
 		Key:  key,
 		Name: name,
-		Version: migration.Version{
+		Version: migration.Order{
 			Value:  dt,
 			Format: lfs.versionFormat,
 		},
@@ -315,8 +315,8 @@ func (lfs *LocalFileSource) createMigration(
 	return m, err
 }
 
-func (lfs *LocalFileSource) extractVersionFromKey(key string) (migration.Version, error) {
-	var result migration.Version
+func (lfs *LocalFileSource) extractVersionFromKey(key string) (migration.Order, error) {
+	var result migration.Order
 	matches := lfs.versionRegexp.FindStringSubmatch(key)
 	if len(matches) < 2 {
 		return result, ErrInvalidTimestamp

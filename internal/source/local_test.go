@@ -79,7 +79,7 @@ func Test_ConvertLocalFolder(t *testing.T) {
 
 		migrations, err := c.Select(
 			ctx,
-			Filter{Versions: []migration.Version{{Value: "1596897188"}, {Value: "1597897177"}}},
+			Filter{Versions: []migration.Order{{Value: "1596897188"}, {Value: "1597897177"}}},
 		)
 
 		require.NoError(t, err)

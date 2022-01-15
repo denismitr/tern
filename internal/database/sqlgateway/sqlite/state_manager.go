@@ -8,11 +8,15 @@ import (
 )
 
 type StateManager struct {
-	migrationsTable, migratedAtColumn string
+	migrationsTable string
 }
 
-func NewStateManager(migrationsTable string, migratedAtColumn string) *StateManager {
-	return &StateManager{migrationsTable: migrationsTable, migratedAtColumn: migratedAtColumn}
+type Options struct {
+	database.CommonOptions
+}
+
+func NewStateManager(migrationsTable string) *StateManager {
+	return &StateManager{migrationsTable: migrationsTable}
 }
 
 var _ sqlgateway.StateManager = (*StateManager)(nil)
@@ -20,23 +24,24 @@ var _ sqlgateway.StateManager = (*StateManager)(nil)
 func (s StateManager) InitQuery() string {
 	const sqliteCreateMigrationsSchema = `
 		CREATE TABLE IF NOT EXISTS %s (
-			version VARCHAR(13) PRIMARY KEY,
+			order BIGINT PRIMARY KEY,
+            batch BIGINT,
 			name VARCHAR(255),
-			%s TIMESTAMP default CURRENT_TIMESTAMP
+			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
 		);	
 	`
 
-	return fmt.Sprintf(sqliteCreateMigrationsSchema, s.migrationsTable, s.migratedAtColumn)
+	return fmt.Sprintf(sqliteCreateMigrationsSchema, s.migrationsTable)
 }
 
 func (s StateManager) InsertQuery(m *migration.Migration) (string, []interface{}, error) {
-	const sqliteInsertVersionQuery = "INSERT INTO %s (version, batch, name) VALUES (?, ?);"
+	const sqliteInsertVersionQuery = "INSERT INTO %s (order, batch, name, migrated_at) VALUES (?, ?, ?, ?);"
 	q := fmt.Sprintf(sqliteInsertVersionQuery, s.migrationsTable)
-	return q, []interface{}{m.Version, m.Batch, m.Name}, nil
+	return q, []interface{}{m.Version.Order, m.Version.Batch, m.Version.Name, m.Version.MigratedAt}, nil
 }
 
 func (s StateManager) RemoveQuery(m *migration.Migration) (string, []interface{}, error) {
-	const sqliteDeleteVersionQuery = "DELETE FROM %s WHERE version = ?;"
+	const sqliteDeleteVersionQuery = "DELETE FROM %s WHERE order = ?;"
 	q := fmt.Sprintf(sqliteDeleteVersionQuery, s.migrationsTable)
 	return q, []interface{}{m.Version}, nil
 }
@@ -48,29 +53,21 @@ func (s StateManager) DropQuery() string {
 }
 
 func (s StateManager) ShowTablesQuery() string {
-	return "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+	return "SELECT name as table_name FROM sqlite_master WHERE type='table' ORDER BY name;"
 }
 
 func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
-	var readSQL = "SELECT `version`, `%s` FROM %s"
+	var readSQL = "SELECT order, batch, name, migrated_at FROM %s"
 
 	if f.Limit != 0 {
 		readSQL += fmt.Sprintf(" LIMIT %d", f.Limit)
 	}
 
 	if f.Sort == database.DESC {
-		readSQL += " ORDER BY `version` DESC"
+		readSQL += " ORDER BY order DESC"
 	} else {
-		readSQL += " ORDER BY `version` ASC"
+		readSQL += " ORDER BY order ASC"
 	}
 
-	return fmt.Sprintf(readSQL, s.migratedAtColumn, s.migrationsTable), nil
-}
-
-func newSqliteSchemaV1(migrationsTable, migratedAtColumn string) *StateManager {
-	return &StateManager{migrationsTable: migrationsTable, migratedAtColumn: migratedAtColumn}
-}
-
-type Options struct {
-	database.CommonOptions
+	return fmt.Sprintf(readSQL, s.migrationsTable), nil
 }

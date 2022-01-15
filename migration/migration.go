@@ -16,15 +16,19 @@ var ErrInvalidMigrationInput = errors.New("invalid migration input")
 
 type (
 	Batch uint
-	Version uint
+	Order uint
+
+	Version struct {
+		Name string
+		Batch      Batch
+		Order      Order
+		MigratedAt time.Time
+	}
 
 	Migration struct {
-		Name string
-		Batch Batch
-		Version  Version
-		Migrate  []string
+		Version Version
+		Migrate []string
 		Rollback []string
-		MigratedAt time.Time
 	}
 
 	ClockFunc func() time.Time
@@ -35,8 +39,8 @@ var timestampRx = regexp.MustCompile(fmt.Sprintf(`^\d{%d,%d}$`, MinTimestampLeng
 var datetimeRx = regexp.MustCompile(`^[12]\d{13}$`)
 
 func Timestamp(t string) VersionFactory {
-	return func() (Version, error) {
-		var result Version
+	return func() (Order, error) {
+		var result Order
 		if len(t) < MinTimestampLength || len(t) > MaxTimestampLength {
 			return result, errors.Wrapf(ErrInvalidVersionFormat, "timestamp [%s] length is invalid", t)
 		}
@@ -52,8 +56,8 @@ func Timestamp(t string) VersionFactory {
 }
 
 func DateTime(year, month, day, hour, minute, second int) VersionFactory {
-	return func() (Version, error) {
-		var result Version
+	return func() (Order, error) {
+		var result Order
 
 		if year < 1900 || year > 2200 {
 			return result, errors.Wrapf(ErrInvalidVersionFormat, "year [%d] must be between 1900 and 2200", year)
@@ -117,8 +121,8 @@ func DateTime(year, month, day, hour, minute, second int) VersionFactory {
 }
 
 func Number(n uint) VersionFactory {
-	return func() (Version, error) {
-		var result Version
+	return func() (Order, error) {
+		var result Order
 
 		s := strconv.Itoa(int(n))
 		if len(s) > MaxVersionLen {
@@ -141,7 +145,7 @@ func NewMigrationFromDB(version string, migratedAt time.Time, name string) Facto
 		m := &Migration{
 			Key:  CreateKeyFromVersionAndName(version, name),
 			Name: name,
-			Version: Version{
+			Version: Order{
 				Value:      version,
 				MigratedAt: migratedAt,
 			},
@@ -158,7 +162,7 @@ func NewMigrationFromDB(version string, migratedAt time.Time, name string) Facto
 func NewMigrationFromFile(
 	key string,
 	name string,
-	version Version,
+	version Order,
 	migrate string,
 	rollback string,
 ) Factory {
@@ -173,7 +177,7 @@ func NewMigrationFromFile(
 	}
 }
 
-type VersionFactory func() (Version, error)
+type VersionFactory func() (Order, error)
 
 func New(vf VersionFactory, name string, migrate, rollback []string) Factory {
 	return func() (*Migration, error) {
@@ -248,8 +252,8 @@ func CreateKeyFromVersionAndName(v, name string) string {
 	return result.String()
 }
 
-func GenerateVersion(cf ClockFunc, vf VersionFormat) Version {
-	var v Version
+func GenerateVersion(cf ClockFunc, vf VersionFormat) Order {
+	var v Order
 
 	v.Format = vf
 	if v.Format == TimestampFormat {
@@ -276,7 +280,7 @@ func SetVersionFormat(m *Migration) error {
 	return nil
 }
 
-func InVersions(version Version, versions []Version) bool {
+func InVersions(version Order, versions []Order) bool {
 	for _, v := range versions {
 		if v.Value == version.Value {
 			return true
@@ -286,10 +290,10 @@ func InVersions(version Version, versions []Version) bool {
 	return false
 }
 
-func VersionFromString(s string) (Version, error) {
+func VersionFromString(s string) (Order, error) {
 	isDatetime := datetimeRx.MatchString(s)
 	if isDatetime {
-		return Version{
+		return Order{
 			Value:  s,
 			Format: DatetimeFormat,
 		}, nil
@@ -297,20 +301,20 @@ func VersionFromString(s string) (Version, error) {
 
 	isTimestamp := timestampRx.MatchString(s)
 	if isTimestamp {
-		return Version{
+		return Order{
 			Value:  s,
 			Format: TimestampFormat,
 		}, nil
 	}
 
 	if isPositiveInt(s) {
-		return Version{
+		return Order{
 			Value:  s,
 			Format: NumberFormat,
 		}, nil
 	}
 
-	return Version{}, errors.Wrapf(ErrInvalidVersionFormat, "input: %s", s)
+	return Order{}, errors.Wrapf(ErrInvalidVersionFormat, "input: %s", s)
 }
 
 func isPositiveInt(s string) bool {

@@ -55,7 +55,7 @@ func TestSchedule(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("it will schedule only 1 migration for rollback if steps are limited to one", func(t *testing.T) {
-		scheduled := ScheduleForRollback(migration.Migrations{m1, m2, m3}, []migration.Version{v1, v2, v3}, Plan{Steps: 1})
+		scheduled := ScheduleForRollback(migration.Migrations{m1, m2, m3}, []migration.Order{v1, v2, v3}, Plan{Steps: 1})
 		require.Len(t, scheduled, 1)
 		assert.Equal(t, v3.Value, scheduled[0].Version.Value)
 		assert.Equal(t, "Create baz table", scheduled[0].Name)
@@ -64,8 +64,8 @@ func TestSchedule(t *testing.T) {
 	t.Run("it will schedule 1 specific migration for rollback if steps are limited to one and versions in plan", func(t *testing.T) {
 		scheduled := ScheduleForRollback(
 			migration.Migrations{m1, m2, m3},
-			[]migration.Version{v1, v2, v3},
-			Plan{Steps: 1, Versions: []migration.Version{v2}},
+			[]migration.Order{v1, v2, v3},
+			Plan{Steps: 1, Versions: []migration.Order{v2}},
 		)
 		require.Len(t, scheduled, 1)
 		assert.Equal(t, v2.Value, scheduled[0].Version.Value)
@@ -73,7 +73,7 @@ func TestSchedule(t *testing.T) {
 	})
 
 	t.Run("it will schedule all migrations for rollback if specific plan not specified", func(t *testing.T) {
-		scheduled := ScheduleForRollback(migration.Migrations{m1, m2, m3}, []migration.Version{v1, v2, v3}, Plan{})
+		scheduled := ScheduleForRollback(migration.Migrations{m1, m2, m3}, []migration.Order{v1, v2, v3}, Plan{})
 		require.Len(t, scheduled, 3)
 
 		assert.Equal(t, v3.Value, scheduled[0].Version.Value)
@@ -90,7 +90,7 @@ func TestSchedule(t *testing.T) {
 	})
 
 	t.Run("it will schedule everything for migration if nothing was migrated", func(t *testing.T) {
-		scheduled := ScheduleForMigration(migration.Migrations{m1, m2, m3}, []migration.Version{}, Plan{})
+		scheduled := ScheduleForMigration(migration.Migrations{m1, m2, m3}, []migration.Order{}, Plan{})
 		require.Len(t, scheduled, 3)
 
 		assert.Equal(t, v3.Value, scheduled[2].Version.Value)
@@ -107,7 +107,7 @@ func TestSchedule(t *testing.T) {
 	})
 
 	t.Run("it will schedule only 2 migrations for migration if plan steps are limited to 2", func(t *testing.T) {
-		scheduled := ScheduleForMigration(migration.Migrations{m1, m2, m3}, []migration.Version{}, Plan{Steps: 2})
+		scheduled := ScheduleForMigration(migration.Migrations{m1, m2, m3}, []migration.Order{}, Plan{Steps: 2})
 		require.Len(t, scheduled, 2)
 
 		assert.Equal(t, v2.Value, scheduled[1].Version.Value)
@@ -122,8 +122,8 @@ func TestSchedule(t *testing.T) {
 	t.Run("it will schedule only 2 migrations for migration if 2 are specified in plan versions", func(t *testing.T) {
 		scheduled := ScheduleForMigration(
 			migration.Migrations{m1, m2, m3},
-			[]migration.Version{},
-			Plan{Versions: []migration.Version{v1, v3}},
+			[]migration.Order{},
+			Plan{Versions: []migration.Order{v1, v3}},
 		)
 
 		require.Len(t, scheduled, 2)
@@ -140,8 +140,8 @@ func TestSchedule(t *testing.T) {
 	t.Run("it will schedule only 1 migration for migration if 2 are specified in plan versions and 1 in steps", func(t *testing.T) {
 		scheduled := ScheduleForMigration(
 			migration.Migrations{m1, m2, m3},
-			[]migration.Version{},
-			Plan{Versions: []migration.Version{v1, v3}, Steps: 1},
+			[]migration.Order{},
+			Plan{Versions: []migration.Order{v1, v3}, Steps: 1},
 		)
 
 		require.Len(t, scheduled, 1)
@@ -152,7 +152,7 @@ func TestSchedule(t *testing.T) {
 	})
 
 	t.Run("it will schedule only 1 migration for refresh if steps are limited to one", func(t *testing.T) {
-		scheduled := ScheduleForRefresh(migration.Migrations{m1, m2, m3}, []migration.Version{v1, v2, v3}, Plan{Steps: 1})
+		scheduled := ScheduleForRefresh(migration.Migrations{m1, m2, m3}, []migration.Order{v1, v2, v3}, Plan{Steps: 1})
 		require.Len(t, scheduled, 1)
 		assert.Equal(t, v3.Value, scheduled[0].Version.Value)
 		assert.Equal(t, "Create baz table", scheduled[0].Name)
@@ -161,8 +161,8 @@ func TestSchedule(t *testing.T) {
 	t.Run("it will schedule 1 specific migration for refresh if steps are limited to one and versions in plan", func(t *testing.T) {
 		scheduled := ScheduleForRefresh(
 			migration.Migrations{m1, m2, m3},
-			[]migration.Version{v1, v2, v3},
-			Plan{Steps: 1, Versions: []migration.Version{v2}},
+			[]migration.Order{v1, v2, v3},
+			Plan{Steps: 1, Versions: []migration.Order{v2}},
 		)
 		require.Len(t, scheduled, 1)
 		assert.Equal(t, v2.Value, scheduled[0].Version.Value)
@@ -170,7 +170,7 @@ func TestSchedule(t *testing.T) {
 	})
 
 	t.Run("it will schedule all migrations for refresh if specific plan not specified", func(t *testing.T) {
-		scheduled := ScheduleForRefresh(migration.Migrations{m1, m2, m3}, []migration.Version{v1, v2, v3}, Plan{})
+		scheduled := ScheduleForRefresh(migration.Migrations{m1, m2, m3}, []migration.Order{v1, v2, v3}, Plan{})
 		require.Len(t, scheduled, 3)
 
 		assert.Equal(t, v3.Value, scheduled[0].Version.Value)

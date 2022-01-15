@@ -14,28 +14,28 @@ func Test_MigrationsCanBeSortedByVersion(t *testing.T) {
 	t.Parallel()
 
 	m1 := &Migration{
-		Version:  Version{Value: "1596897167"},
+		Version:  Order{Value: "1596897167"},
 		Name:     "Foo migration",
 		Migrate:  []string{"CREATE foo"},
 		Rollback: []string{"DROP foo"},
 	}
 
 	m2 := &Migration{
-		Version:  Version{Value: "1586897167"},
+		Version:  Order{Value: "1586897167"},
 		Name:     "Bar migration",
 		Migrate:  []string{"CREATE bar"},
 		Rollback: []string{"DROP bar"},
 	}
 
 	m3 := &Migration{
-		Version:  Version{Value: "1597897167"},
+		Version:  Order{Value: "1597897167"},
 		Name:     "Baz migration",
 		Migrate:  []string{"CREATE baz"},
 		Rollback: []string{"DROP baz"},
 	}
 
 	m4 := &Migration{
-		Version:  Version{Value: "1577897167"},
+		Version:  Order{Value: "1577897167"},
 		Name:     "FooBaz migration",
 		Migrate:  []string{"CREATE foo_baz"},
 		Rollback: []string{"DROP foo_baz"},
@@ -68,29 +68,29 @@ func Test_GenerateVersion_InTimestampFormat(t *testing.T) {
 
 func TestInVersions(t *testing.T) {
 	tt := []struct{
-		name string
-		version Version
-		versions []Version
+		name     string
+		version  Order
+		versions []Order
 		expected bool
 	}{
 		{
 			name: "one version and one match in timestamp format",
-			version: Version{
+			version: Order{
 				Format: TimestampFormat,
 				Value: "1546449499",
 			},
-			versions: []Version{
+			versions: []Order{
 				{Value: "1546449499", Format: TimestampFormat},
 			},
 			expected: true,
 		},
 		{
 			name: "two versions and no match in timestamp format",
-			version: Version{
+			version: Order{
 				Format: TimestampFormat,
 				Value: "1546449499",
 			},
-			versions: []Version{
+			versions: []Order{
 				{Value: "1546449498", Format: TimestampFormat},
 				{Value: "1546446497", Format: TimestampFormat},
 			},

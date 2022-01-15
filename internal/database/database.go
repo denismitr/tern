@@ -35,12 +35,11 @@ type ReadVersionsFilter struct {
 
 type CommonOptions struct {
 	MigrationsTable  string
-	MigratedAtColumn string
 }
 
 type Plan struct {
 	Steps    int
-	Versions []migration.Version
+	Versions []migration.Order
 }
 
 type versionController interface {
@@ -65,7 +64,7 @@ type ConnCloser func() error
 
 func ScheduleForRollback(
 	migrations migration.Migrations,
-	migratedVersions []migration.Version,
+	migratedVersions []migration.Order,
 	p Plan,
 ) migration.Migrations {
 	var scheduled migration.Migrations
@@ -89,7 +88,7 @@ func ScheduleForRollback(
 
 func ScheduleForMigration(
 	migrations migration.Migrations,
-	migratedVersions []migration.Version,
+	migratedVersions []migration.Order,
 	p Plan,
 ) migration.Migrations {
 	var scheduled migration.Migrations
@@ -111,7 +110,7 @@ func ScheduleForMigration(
 
 func ScheduleForRefresh(
 	migrations migration.Migrations,
-	migratedVersions []migration.Version,
+	migratedVersions []migration.Order,
 	p Plan,
 ) migration.Migrations {
 	var scheduled migration.Migrations

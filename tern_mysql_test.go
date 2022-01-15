@@ -201,8 +201,8 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		// given we have already migrated these 2 migrations
 		existingMigrations := migration.Migrations(
 			[]*migration.Migration{
-				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: migration.Version{Value: "1596897167"}},
-				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: migration.Version{Value: "1596897188"}},
+				{Key: "1596897167_create_foo_table", Name: "CreateGateway foo table", Version: migration.Order{Value: "1596897167"}},
+				{Key: "1596897188_create_bar_table", Name: "CreateGateway bar table", Version: migration.Order{Value: "1596897188"}},
 			},
 		)
 
@@ -424,7 +424,7 @@ func Test_Tern_WithMySQL(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
-		keys, err := m.Migrate(ctx, WithVersions(migration.Version{Value: "1596897188"}))
+		keys, err := m.Migrate(ctx, WithVersions(migration.Order{Value: "1596897188"}))
 		assert.NoError(t, err)
 		assert.Len(t, keys, 1)
 

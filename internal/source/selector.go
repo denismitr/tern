@@ -13,7 +13,7 @@ var ErrNotAMigrationFile = errors.New("not a migration file")
 var ErrTooManyFilesForKey = errors.New("too many files for single mysqlDefaultLockKey")
 
 type Filter struct {
-	Versions []migration.Version
+	Versions []migration.Order
 }
 
 type Selector interface {

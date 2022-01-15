@@ -5,6 +5,6 @@ import (
 	"database/sql"
 )
 
-type ctxExecutor interface {
+type CtxExecutor interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }

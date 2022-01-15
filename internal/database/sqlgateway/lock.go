@@ -4,17 +4,17 @@ import (
 	"context"
 )
 
-type locker interface {
-	lock(context.Context, ctxExecutor) error
-	unlock(context.Context, ctxExecutor) error
+type Locker interface {
+	Lock(context.Context, CtxExecutor) error
+	Unlock(context.Context, CtxExecutor) error
 }
 
 type nullLocker struct {}
 
-func (nullLocker) lock(context.Context, ctxExecutor) error {
+func (nullLocker) Lock(context.Context, CtxExecutor) error {
 	return nil
 }
 
-func (nullLocker) unlock(context.Context, ctxExecutor) error {
+func (nullLocker) Unlock(context.Context, CtxExecutor) error {
 	return nil
 }

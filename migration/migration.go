@@ -15,35 +15,20 @@ var ErrInvalidMigrationName = errors.New("invalid migration name")
 var ErrInvalidMigrationInput = errors.New("invalid migration input")
 
 type (
-	VersionFormat string
-
-	Version struct {
-		Format     VersionFormat
-		Value      string
-		MigratedAt time.Time
-	}
+	Batch uint
+	Version uint
 
 	Migration struct {
-		Key      string
-		Name     string
+		Name string
+		Batch Batch
 		Version  Version
 		Migrate  []string
 		Rollback []string
+		MigratedAt time.Time
 	}
 
 	ClockFunc func() time.Time
 	Factory   func() (*Migration, error)
-)
-
-const (
-	TimestampFormat VersionFormat = "timestamp"
-	DatetimeFormat  VersionFormat = "datetime"
-	NumberFormat    VersionFormat = "number"
-	AnyFormat       VersionFormat = "any"
-
-	MaxTimestampLength = 12
-	MinTimestampLength = 9
-	MaxVersionLen      = 14
 )
 
 var timestampRx = regexp.MustCompile(fmt.Sprintf(`^\d{%d,%d}$`, MinTimestampLength, MaxTimestampLength))
@@ -305,7 +290,7 @@ func VersionFromString(s string) (Version, error) {
 	isDatetime := datetimeRx.MatchString(s)
 	if isDatetime {
 		return Version{
-			Value: s,
+			Value:  s,
 			Format: DatetimeFormat,
 		}, nil
 	}
@@ -313,14 +298,14 @@ func VersionFromString(s string) (Version, error) {
 	isTimestamp := timestampRx.MatchString(s)
 	if isTimestamp {
 		return Version{
-			Value: s,
+			Value:  s,
 			Format: TimestampFormat,
 		}, nil
 	}
 
 	if isPositiveInt(s) {
 		return Version{
-			Value: s,
+			Value:  s,
 			Format: NumberFormat,
 		}, nil
 	}

@@ -9,6 +9,7 @@ import (
 
 var ErrNoChangesRequired = errors.New("no changes to the database required")
 var ErrMigrationVersionNotSpecified = errors.New("migration version not specified")
+var ErrMigrationIsMalformed = errors.New("migration is malformed")
 
 var MigratedAtColumn = "migrated_at"
 
@@ -19,6 +20,18 @@ const (
 	OperationMigrate  = "migrate"
 	OperationRefresh  = "refresh"
 )
+
+const (
+	ASC  = "ASC"
+	DESC = "DESC"
+)
+
+type ReadVersionsFilter struct {
+	Limit int
+	Sort  string
+	MinBatch *uint
+	MaxBatch *uint
+}
 
 type CommonOptions struct {
 	MigrationsTable  string

@@ -13,10 +13,10 @@ import (
 )
 
 type SQLGateway struct {
-	locker    Locker
-	lg        logger.Logger
-	conn      *sql.Conn
-	schema    StateManager
+	locker Locker
+	lg     logger.Logger
+	conn   *sql.Conn
+	schema StateManager
 }
 
 var _ database.DB = (*SQLGateway)(nil)
@@ -40,6 +40,27 @@ func NewMySQLGateway(
 	}
 
 	gateway.schema = mysql.NewStateManager(migrationsTable, charset)
+
+	return &gateway
+}
+
+func NewPostgresGateway(
+	conn *sql.Conn,
+	migrationsTable string,
+	lockKey int,
+	lockFor int,
+	noLock bool,
+	charset string,
+) *SQLGateway {
+	gateway := SQLGateway{}
+	gateway.conn = conn
+	gateway.locker = postgres.NewLocker(lockKey, lockFor, noLock)
+
+	if migrationsTable == "" {
+		migrationsTable = database.DefaultMigrationsTable
+	}
+
+	gateway.schema = postgres.NewStateManager(migrationsTable, charset)
 
 	return &gateway
 }

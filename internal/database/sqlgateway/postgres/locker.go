@@ -1,30 +1,31 @@
-package mysql
+package postgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
 	"github.com/pkg/errors"
 )
 
-const DefaultLockKey = "tern_migrations"
+const DefaultLockKey = 99887766
 const DefaultLockSeconds = 3
 
 type Options struct {
 	database.CommonOptions
-	LockKey string
+	LockKey int
 	LockFor int // maybe refactor to duration
 	NoLock  bool
 }
 
 type Locker struct {
-	lockKey string
+	lockKey int
 	lockFor int
 	noLock  bool
 }
 
-func NewLocker(lockKey string, lockFor int, noLock bool) *Locker {
+func NewLocker(lockKey int, lockFor int, noLock bool) *Locker {
 	return &Locker{lockKey: lockKey, lockFor: lockFor, noLock: noLock}
 }
 
@@ -33,7 +34,7 @@ func (l *Locker) Lock(ctx context.Context, ex sqlgateway.CtxExecutor) error {
 		return nil
 	}
 
-	if _, err := ex.ExecContext(ctx, "SELECT GET_LOCK(?, ?)", l.lockKey, l.lockFor); err != nil {
+	if _, err := ex.ExecContext(ctx, fmt.Sprintf("SELECT pg_advisory_lock(%d)", l.lockKey)); err != nil {
 		return errors.Wrapf(err, "could not obtain [%s] exclusive MySQL DB lock for [%d] seconds", l.lockKey, l.lockFor)
 	}
 
@@ -45,7 +46,7 @@ func (l *Locker) Unlock(ctx context.Context, ex sqlgateway.CtxExecutor) error {
 		return nil
 	}
 
-	if _, err := ex.ExecContext(ctx, "SELECT RELEASE_LOCK(?)", l.lockKey); err != nil {
+	if _, err := ex.ExecContext(ctx, "SELECT pg_advisory_unlock(%d)", l.lockKey); err != nil {
 		return errors.Wrapf(err, "could not release [%s] exclusive MySQL DB lock", l.lockKey)
 	}
 

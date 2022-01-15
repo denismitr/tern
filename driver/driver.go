@@ -2,7 +2,9 @@ package driver
 
 import (
 	"database/sql"
-	"errors"
+
+	"github.com/pkg/errors"
+
 	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
 )
@@ -12,12 +14,14 @@ type (
 
 	CommonOptions struct {
 		MigrationsTable string
-		Charset string
+		Charset         string
 	}
 
 	driverConfig struct {
-		sqlConn      *sql.Conn
-		mysqlOptions *MySQLOptions
+		sqlConn         *sql.Conn
+		mysqlOptions    *MySQLOptions
+		postgresOptions *PostgresOptions
+		sqliteOptions   *SqliteOptions
 	}
 
 	Configurator func(cfg *driverConfig)
@@ -27,6 +31,17 @@ type (
 		LockKey string
 		LockFor int // maybe refactor to duration
 		NoLock  bool
+	}
+
+	PostgresOptions struct {
+		CommonOptions
+		LockKey int
+		LockFor int
+		NoLock  bool
+	}
+
+	SqliteOptions struct {
+		CommonOptions
 	}
 )
 
@@ -49,6 +64,18 @@ func WithSqlConnection(conn *sql.Conn) Configurator {
 	}
 }
 
+func WithMySQLOptions(options MySQLOptions) Configurator {
+	return func(cfg *driverConfig) {
+		cfg.mysqlOptions = &options
+	}
+}
+
+func WithPostgresOptions(options PostgresOptions) Configurator {
+	return func(cfg *driverConfig) {
+		cfg.postgresOptions = &options
+	}
+}
+
 func NewDriver(dialect Dialect, configurators ...Configurator) (*Driver, error) {
 	var cfg driverConfig
 
@@ -66,6 +93,12 @@ func NewDriver(dialect Dialect, configurators ...Configurator) (*Driver, error) 
 	switch dialect {
 	case MySQL:
 		db, err = createMySql(cfg)
+	case Postgres:
+		db, err = createPostgres(cfg)
+	case Sqlite:
+		db, err = createSqlite(cfg)
+	default:
+		return nil, errors.Errorf("invalid dialect %s", dialect)
 	}
 
 	if err != nil {
@@ -77,7 +110,7 @@ func NewDriver(dialect Dialect, configurators ...Configurator) (*Driver, error) 
 	return &drv, nil
 }
 
-func createMySql(cfg driverConfig) (database.DB, error)  {
+func createMySql(cfg driverConfig) (database.DB, error) {
 	if cfg.mysqlOptions == nil {
 		cfg.mysqlOptions = &MySQLOptions{
 			CommonOptions: CommonOptions{
@@ -88,6 +121,45 @@ func createMySql(cfg driverConfig) (database.DB, error)  {
 	}
 
 	return sqlgateway.NewMySQLGateway(
+		cfg.sqlConn,
+		cfg.mysqlOptions.MigrationsTable,
+		cfg.mysqlOptions.LockKey,
+		cfg.mysqlOptions.LockFor,
+		cfg.mysqlOptions.NoLock,
+		cfg.mysqlOptions.Charset,
+	), nil
+}
+
+func createPostgres(cfg driverConfig) (database.DB, error) {
+	if cfg.postgresOptions == nil {
+		cfg.postgresOptions = &PostgresOptions{
+			CommonOptions: CommonOptions{
+				MigrationsTable: DefaultMigrationsTable,
+			},
+			NoLock: true,
+		}
+	}
+
+	return sqlgateway.NewPostgresGateway(
+		cfg.sqlConn,
+		cfg.mysqlOptions.MigrationsTable,
+		cfg.mysqlOptions.LockKey,
+		cfg.mysqlOptions.LockFor,
+		cfg.mysqlOptions.NoLock,
+		cfg.mysqlOptions.Charset,
+	), nil
+}
+
+func createSqlite(cfg driverConfig) (database.DB, error) {
+	if cfg.sqliteOptions == nil {
+		cfg.sqliteOptions = &SqliteOptions{
+			CommonOptions: CommonOptions{
+				MigrationsTable: DefaultMigrationsTable,
+			},
+		}
+	}
+
+	return sqlgateway.NewSqliteGateway(
 		cfg.sqlConn,
 		cfg.mysqlOptions.MigrationsTable,
 		cfg.mysqlOptions.LockKey,

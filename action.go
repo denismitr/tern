@@ -1,13 +1,15 @@
 package tern
 
-import "github.com/denismitr/tern/v3/migration"
+import (
+	"github.com/denismitr/tern/v3/internal/database"
+)
 
 type OptionFunc func(*Migrator) error
 type ActionConfigurator func(a *Action)
 
 type Action struct {
 	steps    int
-	versions []migration.Order
+	versions []database.Version
 }
 
 func WithSteps(steps int) ActionConfigurator {
@@ -16,26 +18,31 @@ func WithSteps(steps int) ActionConfigurator {
 	}
 }
 
-func WithVersions(versions ...migration.Order) ActionConfigurator {
+func WithVersions(versions ...Version) ActionConfigurator {
 	return func(a *Action) {
-		a.versions = versions
+		for i := range versions {
+			a.versions = append(a.versions, database.Version{
+				Name: versions[i].Name,
+				Order: database.Order(versions[i].Order),
+				Batch: database.Batch(versions[i].Batch),
+			})
+		}
 	}
 }
 
-func CreateConfigurators(steps int, versionStrings []string) ([]ActionConfigurator, error) {
+// TODO: refactor
+func CreateConfigurators(steps int, versionOrders []uint) ([]ActionConfigurator, error) {
 	var configurators []ActionConfigurator
 	if steps > 0 {
 		configurators = append(configurators, WithSteps(steps))
 	}
 
-	if len(versionStrings) > 0 {
-		var versions []migration.Order
-		for _, s := range versionStrings {
-			if v, err := migration.VersionFromString(s); err != nil {
-				return nil, err
-			} else {
-				versions = append(versions, v)
-			}
+	if len(versionOrders) > 0 {
+		var versions []Version
+		for _, order := range versionOrders {
+			versions = append(versions, Version{
+				Order: Order(order),
+			})
 		}
 		configurators = append(configurators, WithVersions(versions...))
 	}

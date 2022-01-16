@@ -1,4 +1,4 @@
-package driver
+package tern
 
 import (
 	"database/sql"
@@ -54,8 +54,8 @@ const (
 )
 
 type Driver struct {
-	dialect Dialect
-	db      database.DB
+	dialect  Dialect
+	effector database.Effector
 }
 
 func WithSqlConnection(conn *sql.Conn) Configurator {
@@ -88,7 +88,7 @@ func NewDriver(dialect Dialect, configurators ...Configurator) (*Driver, error) 
 	}
 
 	var drv Driver
-	var db database.DB
+	var db database.Effector
 	var err error
 	switch dialect {
 	case MySQL:
@@ -105,12 +105,12 @@ func NewDriver(dialect Dialect, configurators ...Configurator) (*Driver, error) 
 		return nil, err
 	}
 
-	drv.db = db
+	drv.effector = db
 
 	return &drv, nil
 }
 
-func createMySql(cfg driverConfig) (database.DB, error) {
+func createMySql(cfg driverConfig) (database.Effector, error) {
 	if cfg.mysqlOptions == nil {
 		cfg.mysqlOptions = &MySQLOptions{
 			CommonOptions: CommonOptions{
@@ -130,7 +130,7 @@ func createMySql(cfg driverConfig) (database.DB, error) {
 	), nil
 }
 
-func createPostgres(cfg driverConfig) (database.DB, error) {
+func createPostgres(cfg driverConfig) (database.Effector, error) {
 	if cfg.postgresOptions == nil {
 		cfg.postgresOptions = &PostgresOptions{
 			CommonOptions: CommonOptions{
@@ -142,15 +142,15 @@ func createPostgres(cfg driverConfig) (database.DB, error) {
 
 	return sqlgateway.NewPostgresGateway(
 		cfg.sqlConn,
-		cfg.mysqlOptions.MigrationsTable,
-		cfg.mysqlOptions.LockKey,
-		cfg.mysqlOptions.LockFor,
-		cfg.mysqlOptions.NoLock,
-		cfg.mysqlOptions.Charset,
+		cfg.postgresOptions.MigrationsTable,
+		cfg.postgresOptions.LockKey,
+		cfg.postgresOptions.LockFor,
+		cfg.postgresOptions.NoLock,
+		cfg.postgresOptions.Charset,
 	), nil
 }
 
-func createSqlite(cfg driverConfig) (database.DB, error) {
+func createSqlite(cfg driverConfig) (database.Effector, error) {
 	if cfg.sqliteOptions == nil {
 		cfg.sqliteOptions = &SqliteOptions{
 			CommonOptions: CommonOptions{
@@ -162,9 +162,5 @@ func createSqlite(cfg driverConfig) (database.DB, error) {
 	return sqlgateway.NewSqliteGateway(
 		cfg.sqlConn,
 		cfg.mysqlOptions.MigrationsTable,
-		cfg.mysqlOptions.LockKey,
-		cfg.mysqlOptions.LockFor,
-		cfg.mysqlOptions.NoLock,
-		cfg.mysqlOptions.Charset,
 	), nil
 }

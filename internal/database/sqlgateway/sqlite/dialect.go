@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
-	"github.com/denismitr/tern/v3/migration"
 )
 
-type StateManager struct {
+type Dialect struct {
 	migrationsTable string
 }
 
@@ -15,13 +14,13 @@ type Options struct {
 	database.CommonOptions
 }
 
-func NewStateManager(migrationsTable string) *StateManager {
-	return &StateManager{migrationsTable: migrationsTable}
+func NewDialect(migrationsTable string) *Dialect {
+	return &Dialect{migrationsTable: migrationsTable}
 }
 
-var _ sqlgateway.StateManager = (*StateManager)(nil)
+var _ sqlgateway.Dialect = (*Dialect)(nil)
 
-func (s StateManager) InitQuery() string {
+func (d Dialect) InitQuery() string {
 	const sqliteCreateMigrationsSchema = `
 		CREATE TABLE IF NOT EXISTS %s (
 			order BIGINT PRIMARY KEY,
@@ -31,32 +30,32 @@ func (s StateManager) InitQuery() string {
 		);	
 	`
 
-	return fmt.Sprintf(sqliteCreateMigrationsSchema, s.migrationsTable)
+	return fmt.Sprintf(sqliteCreateMigrationsSchema, d.migrationsTable)
 }
 
-func (s StateManager) InsertQuery(m *migration.Migration) (string, []interface{}, error) {
+func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error) {
 	const sqliteInsertVersionQuery = "INSERT INTO %s (order, batch, name, migrated_at) VALUES (?, ?, ?, ?);"
-	q := fmt.Sprintf(sqliteInsertVersionQuery, s.migrationsTable)
+	q := fmt.Sprintf(sqliteInsertVersionQuery, d.migrationsTable)
 	return q, []interface{}{m.Version.Order, m.Version.Batch, m.Version.Name, m.Version.MigratedAt}, nil
 }
 
-func (s StateManager) RemoveQuery(m *migration.Migration) (string, []interface{}, error) {
+func (d Dialect) RemoveQuery(m database.Migration) (string, []interface{}, error) {
 	const sqliteDeleteVersionQuery = "DELETE FROM %s WHERE order = ?;"
-	q := fmt.Sprintf(sqliteDeleteVersionQuery, s.migrationsTable)
+	q := fmt.Sprintf(sqliteDeleteVersionQuery, d.migrationsTable)
 	return q, []interface{}{m.Version}, nil
 }
 
-func (s StateManager) DropQuery() string {
+func (d Dialect) DropQuery() string {
 	const sqliteDropMigrationsQuery = "DROP TABLE IF EXISTS %s;"
-	q := fmt.Sprintf(sqliteDropMigrationsQuery, s.migrationsTable)
+	q := fmt.Sprintf(sqliteDropMigrationsQuery, d.migrationsTable)
 	return q
 }
 
-func (s StateManager) ShowTablesQuery() string {
+func (d Dialect) ShowTablesQuery() string {
 	return "SELECT name as table_name FROM sqlite_master WHERE type='table' ORDER BY name;"
 }
 
-func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
+func (d Dialect) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
 	var readSQL = "SELECT order, batch, name, migrated_at FROM %s"
 
 	if f.Limit != 0 {
@@ -69,5 +68,5 @@ func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, 
 		readSQL += " ORDER BY order ASC"
 	}
 
-	return fmt.Sprintf(readSQL, s.migrationsTable), nil
+	return fmt.Sprintf(readSQL, d.migrationsTable), nil
 }

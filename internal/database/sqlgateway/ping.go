@@ -2,12 +2,12 @@ package sqlgateway
 
 import (
 	"context"
-	"github.com/jmoiron/sqlx"
+	"database/sql"
 	"github.com/pkg/errors"
 	"time"
 )
 
-func Ping(ctx context.Context, db *sqlx.DB) error {
+func Ping(ctx context.Context, db *sql.DB) error {
 	// Проверяем есть ли связь с БД
 	for attempts := 1; ; attempts++ {
 		if err := db.Ping(); err == nil {
@@ -28,7 +28,7 @@ func Ping(ctx context.Context, db *sqlx.DB) error {
 	}
 
 	var result int
-	if err := db.QueryRowxContext(ctx, "select 1").Scan(&result); err != nil {
+	if err := db.QueryRowContext(ctx, "select 1").Scan(&result); err != nil {
 		return errors.Wrap(err, "could not ping DB")
 	}
 

@@ -4,22 +4,20 @@ import (
 	"fmt"
 	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
-	"github.com/denismitr/tern/v3/migration"
-	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
 )
 
-type StateManager struct {
+type Dialect struct {
 	migrationsTable, charset string
 }
 
-var _ sqlgateway.StateManager = (*StateManager)(nil)
+var _ sqlgateway.Dialect = (*Dialect)(nil)
 
-func NewPostgresStateManager(migrationsTable, charset string) *StateManager {
-	return &StateManager{migrationsTable: migrationsTable, charset: charset}
+func NewDialect(migrationsTable, charset string) *Dialect {
+	return &Dialect{migrationsTable: migrationsTable, charset: charset}
 }
 
-func (s StateManager) InitQuery() string {
+func (d Dialect) InitQuery() string {
 	const createSQL = `
 		CREATE TABLE IF NOT EXISTS %s (
 			order bigint PRIMARY KEY,
@@ -29,10 +27,10 @@ func (s StateManager) InitQuery() string {
 		) ENGINE=InnoDB CHARACTER SET=%s
 	`
 
-	return fmt.Sprintf(createSQL, s.migrationsTable, s.charset)
+	return fmt.Sprintf(createSQL, d.migrationsTable, d.charset)
 }
 
-func (s StateManager) InsertQuery(m *migration.Migration) (string, []interface{}, error) {
+func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error) {
 	// TODO: optimize with bytes.Buffer
 
 	const insertSQL = `
@@ -62,10 +60,10 @@ func (s StateManager) InsertQuery(m *migration.Migration) (string, []interface{}
 		m.Version.MigratedAt,
 	}
 
-	return fmt.Sprintf(insertSQL, s.migrationsTable), args, nil
+	return fmt.Sprintf(insertSQL, d.migrationsTable), args, nil
 }
 
-func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
+func (d Dialect) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
 	var readSQL = "SELECT order, batch, name, migrated_at FROM %s"
 
 	if f.MinBatch != nil {
@@ -102,24 +100,24 @@ func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, 
 		readSQL += " ORDER BY version ASC"
 	}
 
-	return fmt.Sprintf(readSQL, s.migrationsTable), nil
+	return fmt.Sprintf(readSQL, d.migrationsTable), nil
 }
 
-func (s StateManager) RemoveQuery(m *migration.Migration) (string, []interface{}, error) {
+func (d Dialect) RemoveQuery(m database.Migration) (string, []interface{}, error) {
 	if m.Version.Order <= 1 {
 		return "", nil, errors.Wrapf(database.ErrMigrationIsMalformed, "version order must be greater than 0")
 	}
 	const removeSQL = "DELETE FROM %s WHERE order = $1;"
-	return fmt.Sprintf(removeSQL, s.migrationsTable), []interface{}{m.Version.Order}, nil
+	return fmt.Sprintf(removeSQL, d.migrationsTable), []interface{}{m.Version.Order}, nil
 }
 
-func (s StateManager) DropQuery() string {
+func (d Dialect) DropQuery() string {
 	const dropSQL = `
 		DROP TABLE IF EXISTS %s;
 	`
-	return fmt.Sprintf(dropSQL, s.migrationsTable)
+	return fmt.Sprintf(dropSQL, d.migrationsTable)
 }
 
-func (s StateManager) ShowTablesQuery() string {
+func (d Dialect) ShowTablesQuery() string {
 	return "SELECT schemaname as table_name FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';"
 }

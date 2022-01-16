@@ -15,7 +15,7 @@ func TestNewSqliteGateway(t *testing.T) {
 		require.NotNil(t, closer)
 		require.NotNil(t, g)
 
-		s, ok := g.schema.(*sqliteSchemaV1)
+		s, ok := g.dialect.(*sqliteSchemaV1)
 		require.True(t, ok)
 
 		assert.Equal(t, "migrations", s.migrationsTable)
@@ -34,7 +34,7 @@ func TestNewSqliteGateway(t *testing.T) {
 		require.NotNil(t, closer)
 		require.NotNil(t, g)
 
-		s, ok := g.schema.(*sqliteSchemaV1)
+		s, ok := g.dialect.(*sqliteSchemaV1)
 		require.True(t, ok)
 
 		assert.Equal(t, "foo", s.migrationsTable)
@@ -50,7 +50,7 @@ func TestNewMySQLGateway(t *testing.T) {
 		require.NotNil(t, closer)
 		require.NotNil(t, g)
 
-		s, ok := g.schema.(*mysqlSchemaV1)
+		s, ok := g.dialect.(*mysqlSchemaV1)
 		require.True(t, ok)
 
 		assert.Equal(t, "migrations", s.migrationsTable)
@@ -71,7 +71,7 @@ func TestNewMySQLGateway(t *testing.T) {
 		require.NotNil(t, closer)
 		require.NotNil(t, g)
 
-		s, ok := g.schema.(*mysqlSchemaV1)
+		s, ok := g.dialect.(*mysqlSchemaV1)
 		require.True(t, ok)
 
 		assert.Equal(t, "foo", s.migrationsTable)

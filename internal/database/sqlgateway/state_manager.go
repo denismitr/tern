@@ -2,7 +2,6 @@ package sqlgateway
 
 import (
 	"github.com/denismitr/tern/v3/internal/database"
-	"github.com/denismitr/tern/v3/migration"
 )
 
 const (
@@ -15,10 +14,10 @@ type ReadVersionsFilter struct {
 	Sort  string
 }
 
-type StateManager interface {
+type Dialect interface {
 	InitQuery() string
-	InsertQuery(m *migration.Migration) (string, []interface{}, error)
-	RemoveQuery(m *migration.Migration) (string, []interface{}, error)
+	InsertQuery(m database.Migration) (string, []interface{}, error)
+	RemoveQuery(m database.Migration) (string, []interface{}, error)
 	DropQuery() string
 	ShowTablesQuery() string
 	ReadVersionsQuery(f database.ReadVersionsFilter) (string, error)

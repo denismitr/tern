@@ -5,21 +5,21 @@ import (
 	"database/sql"
 	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/denismitr/tern/v3/internal/database/sqlgateway/mysql"
+	"github.com/denismitr/tern/v3/internal/database/sqlgateway/postgres"
 	"github.com/denismitr/tern/v3/internal/database/sqlgateway/sqlite"
 	"github.com/denismitr/tern/v3/internal/logger"
-	"github.com/denismitr/tern/v3/migration"
 	"github.com/pkg/errors"
 	"time"
 )
 
 type SQLGateway struct {
-	locker Locker
-	lg     logger.Logger
-	conn   *sql.Conn
-	schema StateManager
+	locker  Locker
+	lg      logger.Logger
+	conn    *sql.Conn
+	dialect Dialect
 }
 
-var _ database.DB = (*SQLGateway)(nil)
+var _ database.Effector = (*SQLGateway)(nil)
 
 // NewMySQLGateway - creates a new MySQL gateway and uses the SQLConnector interface to attempt to
 // Connect to the MySQL database
@@ -39,7 +39,7 @@ func NewMySQLGateway(
 		migrationsTable = database.DefaultMigrationsTable
 	}
 
-	gateway.schema = mysql.NewStateManager(migrationsTable, charset)
+	gateway.dialect = mysql.NewDialect(migrationsTable, charset)
 
 	return &gateway
 }
@@ -60,54 +60,37 @@ func NewPostgresGateway(
 		migrationsTable = database.DefaultMigrationsTable
 	}
 
-	gateway.schema = postgres.NewStateManager(migrationsTable, charset)
+	gateway.dialect = postgres.NewDialect(migrationsTable, charset)
 
 	return &gateway
 }
 
 // NewSqliteGateway - creates a new SQL gateway
-func NewSqliteGateway(connector SQLConnector, options *sqlite.Options) (*SQLGateway, database.ConnCloser) {
+func NewSqliteGateway(conn *sql.Conn, migrationsTable string) *SQLGateway {
 	gateway := SQLGateway{}
-	gateway.connector = connector
+	gateway.conn = conn
 	gateway.locker = &nullLocker{}
 
-	if options.MigrationsTable == "" {
-		options.MigrationsTable = database.DefaultMigrationsTable
+	if migrationsTable == "" {
+		migrationsTable = database.DefaultMigrationsTable
 	}
 
-	gateway.schema = sqlite.NewStateManager(options.MigrationsTable)
+	gateway.dialect = sqlite.NewDialect(migrationsTable)
 
-	return &gateway, connector.Close
+	return &gateway
 }
 
 func (g *SQLGateway) SetLogger(lg logger.Logger) {
 	g.lg = lg
 }
 
-func (g *SQLGateway) Connect() error {
-	if g.conn != nil {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), g.connector.Timeout())
-	defer cancel()
-
-	conn, err := g.connector.Connect(ctx)
-	if err != nil {
-		return err
-	}
-
-	g.conn = conn
-	return nil
-}
-
 func (g *SQLGateway) Migrate(
 	ctx context.Context,
-	migrations migration.Migrations,
-	p database.Plan) (migration.Migrations, error) {
-	var migrated migration.Migrations
+	migrations database.Migrations,
+	p database.Plan) (database.Migrations, error) {
+	var migrated database.Migrations
 
-	f := func(tx *sql.Tx, migratedVersions []migration.Order) error {
+	f := func(tx *sql.Tx, migratedVersions []database.Version) error {
 		scheduled := database.ScheduleForMigration(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
@@ -115,13 +98,14 @@ func (g *SQLGateway) Migrate(
 		}
 
 		for i := range scheduled {
+			scheduled[i].Version.MigratedAt = time.Now()
 			if err := g.migrateOne(ctx, tx, scheduled[i]); err != nil {
 				return err
 			}
 
 			g.lg.Successf(
 				"migrated: version: %d batch: %d name: %s",
-				scheduled[i].Version.Order, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Version.Batch, scheduled[i].Version.Name,
 			)
 
 			migrated = append(migrated, scheduled[i])
@@ -139,12 +123,12 @@ func (g *SQLGateway) Migrate(
 
 func (g *SQLGateway) Rollback(
 	ctx context.Context,
-	migrations migration.Migrations,
+	migrations database.Migrations,
 	p database.Plan,
-) (migration.Migrations, error) {
-	var rolledBack migration.Migrations
+) (database.Migrations, error) {
+	var rolledBack database.Migrations
 
-	f := func(tx *sql.Tx, migratedVersions []migration.Order) error {
+	f := func(tx *sql.Tx, migratedVersions []database.Version) error {
 		scheduled := database.ScheduleForRollback(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
@@ -154,7 +138,7 @@ func (g *SQLGateway) Rollback(
 		for i := range scheduled {
 			g.lg.Debugf(
 				"rolling back version: %d, batch %d, name %s",
-				scheduled[i].Version.Order, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Version.Batch, scheduled[i].Version.Name,
 			)
 
 			if err := g.rollbackOne(ctx, tx, scheduled[i]); err != nil {
@@ -163,7 +147,7 @@ func (g *SQLGateway) Rollback(
 
 			g.lg.Successf(
 				"rolled back version: %d, batch %d, name %s",
-				scheduled[i].Version.Order, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Version.Batch, scheduled[i].Version.Name,
 			)
 
 			rolledBack = append(rolledBack, scheduled[i])
@@ -181,13 +165,13 @@ func (g *SQLGateway) Rollback(
 
 func (g *SQLGateway) Refresh(
 	ctx context.Context,
-	migrations migration.Migrations,
+	migrations database.Migrations,
 	p database.Plan,
-) (migration.Migrations, migration.Migrations, error) {
-	var rolledBack migration.Migrations
-	var migrated migration.Migrations
+) (database.Migrations, database.Migrations, error) {
+	var rolledBack database.Migrations
+	var migrated database.Migrations
 
-	f := func(tx *sql.Tx, migratedVersions []migration.Order) error {
+	f := func(tx *sql.Tx, migratedVersions []database.Version) error {
 		scheduled := database.ScheduleForRefresh(migrations, migratedVersions, p)
 
 		if len(scheduled) == 0 {
@@ -207,22 +191,24 @@ func (g *SQLGateway) Refresh(
 			rolledBack = append(rolledBack, scheduled[i])
 			g.lg.Successf(
 				"rolled back version: %d, batch %d, name %s",
-				scheduled[i].Version, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Version.Batch, scheduled[i].Version.Name,
 			)
 		}
 
 		for i := len(scheduled) - 1; i >= 0; i-- {
 			g.lg.Debugf(
 				"migrating version: %d, batch %d, name %s",
-				scheduled[i].Version, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version, scheduled[i].Version.Batch, scheduled[i].Version.Name,
 			)
+
+			scheduled[i].Version.MigratedAt = time.Now()
 			if err := g.migrateOne(ctx, tx, scheduled[i]); err != nil {
 				return err
 			}
 
 			migrated = append(migrated, scheduled[i])
 			g.lg.Debugf("migrated version: %d, batch %d, name %s",
-				scheduled[i].Version, scheduled[i].Batch, scheduled[i].Name,
+				scheduled[i].Version.Order, scheduled[i].Version.Batch, scheduled[i].Version.Name,
 			)
 		}
 
@@ -236,7 +222,7 @@ func (g *SQLGateway) Refresh(
 	return rolledBack, migrated, nil
 }
 
-func (g *SQLGateway) ReadVersions(ctx context.Context) ([]migration.Version, error) {
+func (g *SQLGateway) ReadVersions(ctx context.Context) ([]database.Version, error) {
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -256,7 +242,7 @@ func (g *SQLGateway) ReadVersions(ctx context.Context) ([]migration.Version, err
 }
 
 func (g *SQLGateway) CreateMigrationsTable(ctx context.Context) error {
-	if _, err := g.conn.ExecContext(ctx, g.schema.InitQuery()); err != nil {
+	if _, err := g.conn.ExecContext(ctx, g.dialect.InitQuery()); err != nil {
 		return err
 	}
 
@@ -264,21 +250,21 @@ func (g *SQLGateway) CreateMigrationsTable(ctx context.Context) error {
 }
 
 func (g *SQLGateway) DropMigrationsTable(ctx context.Context) error {
-	if _, err := g.conn.ExecContext(ctx, g.schema.DropQuery()); err != nil {
+	if _, err := g.conn.ExecContext(ctx, g.dialect.DropQuery()); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (g *SQLGateway) WriteVersions(ctx context.Context, migrations migration.Migrations) error {
+func (g *SQLGateway) WriteVersions(ctx context.Context, migrations database.Migrations) error {
 	tx, err := g.conn.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		return errors.Wrap(err, "could not start transaction to write migratrions")
 	}
 
 	for _, m := range migrations {
-		insertQuery, args, err := g.schema.InsertQuery(m)
+		insertQuery, args, err := g.dialect.InsertQuery(m)
 		if err != nil {
 			return err
 		}
@@ -312,7 +298,7 @@ func (g *SQLGateway) WriteVersions(ctx context.Context, migrations migration.Mig
 }
 
 func (g *SQLGateway) ShowTables(ctx context.Context) ([]string, error) {
-	rows, err := g.conn.QueryContext(ctx, g.schema.ShowTablesQuery())
+	rows, err := g.conn.QueryContext(ctx, g.dialect.ShowTablesQuery())
 	if err != nil {
 		return nil, errors.Wrap(err, "could not list all tables")
 	}
@@ -351,7 +337,7 @@ func (g *SQLGateway) ShowTables(ctx context.Context) ([]string, error) {
 func (g *SQLGateway) execUnderLock(
 	ctx context.Context,
 	operation string,
-	f func(*sql.Tx, []migration.Version) error,
+	f func(*sql.Tx, []database.Version) error,
 ) error {
 	if err := g.locker.Lock(ctx, g.conn); err != nil {
 		return errors.Wrap(err, "database lock failed")
@@ -392,12 +378,12 @@ func (g *SQLGateway) execUnderLock(
 	return g.locker.Unlock(ctx, g.conn)
 }
 
-func (g *SQLGateway) migrateOne(ctx context.Context, ex CtxExecutor, m *migration.Migration) error {
+func (g *SQLGateway) migrateOne(ctx context.Context, ex CtxExecutor, m database.Migration) error {
 	if m.Version.Order == 0 {
 		return database.ErrMigrationVersionNotSpecified
 	}
 
-	insertQuery, args, err := g.schema.InsertQuery(m)
+	insertQuery, args, err := g.dialect.InsertQuery(m)
 	if err != nil {
 		return err
 	}
@@ -427,12 +413,12 @@ func (g *SQLGateway) migrateOne(ctx context.Context, ex CtxExecutor, m *migratio
 	return nil
 }
 
-func (g *SQLGateway) rollbackOne(ctx context.Context, ex CtxExecutor, m *migration.Migration) error {
+func (g *SQLGateway) rollbackOne(ctx context.Context, ex CtxExecutor, m database.Migration) error {
 	if m.Version.Order == 0 {
 		return database.ErrMigrationVersionNotSpecified
 	}
 
-	removeVersionQuery, args, err := g.schema.RemoveQuery(m)
+	removeVersionQuery, args, err := g.dialect.RemoveQuery(m)
 	if err != nil {
 		return err
 	}
@@ -463,8 +449,8 @@ func (g *SQLGateway) rollbackOne(ctx context.Context, ex CtxExecutor, m *migrati
 	return nil
 }
 
-func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f database.ReadVersionsFilter) ([]migration.Version, error) {
-	q, err := g.schema.ReadVersionsQuery(f)
+func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f database.ReadVersionsFilter) ([]database.Version, error) {
+	q, err := g.dialect.ReadVersionsQuery(f)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +464,7 @@ func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f database.ReadVersionsFilt
 		return nil, errors.Wrap(err, "read versions error")
 	}
 
-	var result []migration.Version
+	var result []database.Version
 
 	defer func() {
 		if err := rows.Close(); err != nil {
@@ -495,8 +481,8 @@ func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f database.ReadVersionsFilt
 			}
 		}
 
-		var order migration.Order
-		var batch migration.Batch
+		var order database.Order
+		var batch database.Batch
 		var name string
 		var migratedAt time.Time
 		if err := rows.Scan(&order, &batch, &name, &migratedAt); err != nil {
@@ -507,7 +493,7 @@ func (g *SQLGateway) readVersionsUnderTx(tx *sql.Tx, f database.ReadVersionsFilt
 			return result, err
 		}
 
-		result = append(result, migration.Version{
+		result = append(result, database.Version{
 			Order:      order,
 			Batch:      batch,
 			Name:       name,

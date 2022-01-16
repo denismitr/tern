@@ -2,6 +2,7 @@ package source
 
 import (
 	"context"
+	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/denismitr/tern/v3/migration"
 	"github.com/pkg/errors"
 	"strings"
@@ -13,7 +14,7 @@ var ErrNotAMigrationFile = errors.New("not a migration file")
 var ErrTooManyFilesForKey = errors.New("too many files for single mysqlDefaultLockKey")
 
 type Filter struct {
-	Versions []migration.Order
+	Versions []database.Order
 }
 
 type Selector interface {

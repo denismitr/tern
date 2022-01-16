@@ -4,21 +4,19 @@ import (
 	"fmt"
 	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
-	"github.com/denismitr/tern/v3/migration"
-	_ "github.com/go-sql-driver/mysql"
 )
 
-type StateManager struct {
+type Dialect struct {
 	migrationsTable, charset string
 }
 
-var _ sqlgateway.StateManager = (*StateManager)(nil)
+var _ sqlgateway.Dialect = (*Dialect)(nil)
 
-func NewStateManager(migrationsTable, charset string) *StateManager {
-	return &StateManager{migrationsTable: migrationsTable, charset: charset}
+func NewDialect(migrationsTable, charset string) *Dialect {
+	return &Dialect{migrationsTable: migrationsTable, charset: charset}
 }
 
-func (s StateManager) InitQuery() string {
+func (d Dialect) InitQuery() string {
 	const createSQL = `
 		CREATE TABLE IF NOT EXISTS %s (
 			order BIGINT PRIMARY KEY,
@@ -28,14 +26,14 @@ func (s StateManager) InitQuery() string {
 		) ENGINE=InnoDB CHARACTER SET=%s
 	`
 
-	return fmt.Sprintf(createSQL, s.migrationsTable, s.charset)
+	return fmt.Sprintf(createSQL, d.migrationsTable, d.charset)
 }
 
-func (s StateManager) InsertQuery(m *migration.Migration) (string, []interface{}, error) {
+func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error) {
 	const insertSQL = "INSERT INTO %s (`order`, `batch`, `name`, `migrated_at`) VALUES (?, ?, ?, ?);"
 
 	// TODO: validation
-	return fmt.Sprintf(insertSQL, s.migrationsTable), []interface{}{
+	return fmt.Sprintf(insertSQL, d.migrationsTable), []interface{}{
 		m.Version,
 		m.Version.Batch,
 		m.Version.Name,
@@ -43,7 +41,7 @@ func (s StateManager) InsertQuery(m *migration.Migration) (string, []interface{}
 	}, nil
 }
 
-func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
+func (d Dialect) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
 	var readSQL = "SELECT `order`, `name`, `batch`, `migrated_at` FROM %s"
 
 	// TODO: optimize with bytes.Buffer
@@ -62,22 +60,22 @@ func (s StateManager) ReadVersionsQuery(f database.ReadVersionsFilter) (string, 
 		readSQL += " ORDER BY `order` ASC"
 	}
 
-	return fmt.Sprintf(readSQL, s.migrationsTable), nil
+	return fmt.Sprintf(readSQL, d.migrationsTable), nil
 }
 
-func (s StateManager) RemoveQuery(m *migration.Migration) (string, []interface{}, error) {
+func (d Dialect) RemoveQuery(m database.Migration) (string, []interface{}, error) {
 	const removeSQL = "DELETE FROM %s WHERE `order` = ?;"
 	// TODO: validation
-	return fmt.Sprintf(removeSQL, s.migrationsTable), []interface{}{m.Version}, nil
+	return fmt.Sprintf(removeSQL, d.migrationsTable), []interface{}{m.Version}, nil
 }
 
-func (s StateManager) DropQuery() string {
+func (d Dialect) DropQuery() string {
 	const dropSQL = `
 		DROP TABLE IF EXISTS %s;
 	`
-	return fmt.Sprintf(dropSQL, s.migrationsTable)
+	return fmt.Sprintf(dropSQL, d.migrationsTable)
 }
 
-func (s StateManager) ShowTablesQuery() string {
+func (d Dialect) ShowTablesQuery() string {
 	return "SHOW TABLES;"
 }

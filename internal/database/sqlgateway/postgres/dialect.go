@@ -20,7 +20,7 @@ func NewDialect(migrationsTable, charset string) *Dialect {
 func (d Dialect) InitQuery() string {
 	const createSQL = `
 		CREATE TABLE IF NOT EXISTS %s (
-			order bigint PRIMARY KEY,
+			id bigint PRIMARY KEY,
 			batch bigint,
 			name VARCHAR(120),
 			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
@@ -34,11 +34,11 @@ func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error
 	// TODO: optimize with bytes.Buffer
 
 	const insertSQL = `
-		INSERT INTO %s (order, batch, name, migrated_at) VALUES ($1, $2, $3, $4);	
+		INSERT INTO %s (id, batch, name, migrated_at) VALUES ($1, $2, $3, $4);	
 	`
 
-	if m.Version.Order <= 1 {
-		return "", nil, errors.Wrapf(database.ErrMigrationIsMalformed, "version order must be greater than 0")
+	if m.Version.ID <= 1 {
+		return "", nil, errors.Wrapf(database.ErrMigrationIsMalformed, "version id must be greater than 0")
 	}
 
 	if m.Version.Batch <= 1 {
@@ -54,7 +54,7 @@ func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error
 	}
 
 	args := []interface{}{
-		m.Version.Order,
+		m.Version.ID,
 		m.Version.Batch,
 		m.Version.Name,
 		m.Version.MigratedAt,
@@ -64,7 +64,7 @@ func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error
 }
 
 func (d Dialect) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
-	var readSQL = "SELECT order, batch, name, migrated_at FROM %s"
+	var readSQL = "SELECT id, batch, name, migrated_at FROM %s"
 
 	if f.MinBatch != nil {
 		if *f.MinBatch <= 1 {
@@ -95,20 +95,20 @@ func (d Dialect) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error
 	}
 
 	if f.Sort == database.DESC {
-		readSQL += " ORDER BY version DESC"
+		readSQL += " ORDER BY id DESC"
 	} else {
-		readSQL += " ORDER BY version ASC"
+		readSQL += " ORDER BY id ASC"
 	}
 
 	return fmt.Sprintf(readSQL, d.migrationsTable), nil
 }
 
 func (d Dialect) RemoveQuery(m database.Migration) (string, []interface{}, error) {
-	if m.Version.Order <= 1 {
-		return "", nil, errors.Wrapf(database.ErrMigrationIsMalformed, "version order must be greater than 0")
+	if m.Version.ID <= 1 {
+		return "", nil, errors.Wrapf(database.ErrMigrationIsMalformed, "version id must be greater than 0")
 	}
-	const removeSQL = "DELETE FROM %s WHERE order = $1;"
-	return fmt.Sprintf(removeSQL, d.migrationsTable), []interface{}{m.Version.Order}, nil
+	const removeSQL = "DELETE FROM %s WHERE id = $1;"
+	return fmt.Sprintf(removeSQL, d.migrationsTable), []interface{}{m.Version.ID}, nil
 }
 
 func (d Dialect) DropQuery() string {

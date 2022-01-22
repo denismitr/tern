@@ -23,7 +23,7 @@ var _ sqlgateway.Dialect = (*Dialect)(nil)
 func (d Dialect) InitQuery() string {
 	const sqliteCreateMigrationsSchema = `
 		CREATE TABLE IF NOT EXISTS %s (
-			order BIGINT PRIMARY KEY,
+			id BIGINT PRIMARY KEY,
             batch BIGINT,
 			name VARCHAR(255),
 			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
@@ -34,13 +34,13 @@ func (d Dialect) InitQuery() string {
 }
 
 func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error) {
-	const sqliteInsertVersionQuery = "INSERT INTO %s (order, batch, name, migrated_at) VALUES (?, ?, ?, ?);"
+	const sqliteInsertVersionQuery = "INSERT INTO %s (id, batch, name, migrated_at) VALUES (?, ?, ?, ?);"
 	q := fmt.Sprintf(sqliteInsertVersionQuery, d.migrationsTable)
-	return q, []interface{}{m.Version.Order, m.Version.Batch, m.Version.Name, m.Version.MigratedAt}, nil
+	return q, []interface{}{m.Version.ID, m.Version.Batch, m.Version.Name, m.Version.MigratedAt}, nil
 }
 
 func (d Dialect) RemoveQuery(m database.Migration) (string, []interface{}, error) {
-	const sqliteDeleteVersionQuery = "DELETE FROM %s WHERE order = ?;"
+	const sqliteDeleteVersionQuery = "DELETE FROM %s WHERE id = ?;"
 	q := fmt.Sprintf(sqliteDeleteVersionQuery, d.migrationsTable)
 	return q, []interface{}{m.Version}, nil
 }
@@ -56,7 +56,7 @@ func (d Dialect) ShowTablesQuery() string {
 }
 
 func (d Dialect) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
-	var readSQL = "SELECT order, batch, name, migrated_at FROM %s"
+	var readSQL = "SELECT id, batch, name, migrated_at FROM %s"
 
 	if f.Limit != 0 {
 		readSQL += fmt.Sprintf(" LIMIT %d", f.Limit)

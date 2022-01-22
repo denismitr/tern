@@ -26,6 +26,7 @@ type Migrator struct {
 func NewMigrator(driver *Driver, opts ...OptionFunc) (*Migrator, error) {
 	m := new(Migrator)
 	m.lg = &logger.NullLogger{}
+	m.driver = driver
 
 	for _, oFunc := range opts {
 		if err := oFunc(m); err != nil {
@@ -51,12 +52,12 @@ func (m *Migrator) Migrate(ctx context.Context, migrations Migrations, cfs ...Ac
 	databaseMigrations := make(database.Migrations, len(migrations))
 	for i := range migrations {
 		databaseMigrations[i] = database.Migration{
-			Migrate: migrations[i].Migrate,
+			Migrate:  migrations[i].Migrate,
 			Rollback: migrations[i].Rollback,
 			Version: database.Version{
-				Name: migrations[i].Version.Name,
+				Name:  migrations[i].Version.Name,
 				Batch: database.Batch(migrations[i].Version.Batch),
-				Order: database.Order(migrations[i].Version.Order),
+				ID:    database.ID(migrations[i].Version.ID),
 			},
 		}
 	}
@@ -88,12 +89,12 @@ func (m *Migrator) Rollback(ctx context.Context, migrations Migrations, cfs ...A
 	databaseMigrations := make(database.Migrations, len(migrations))
 	for i := range migrations {
 		databaseMigrations[i] = database.Migration{
-			Migrate: migrations[i].Migrate,
+			Migrate:  migrations[i].Migrate,
 			Rollback: migrations[i].Rollback,
 			Version: database.Version{
-				Name: migrations[i].Version.Name,
+				Name:  migrations[i].Version.Name,
 				Batch: database.Batch(migrations[i].Version.Batch),
-				Order: database.Order(migrations[i].Version.Order),
+				ID:    database.ID(migrations[i].Version.ID),
 			},
 		}
 	}
@@ -128,12 +129,12 @@ func (m *Migrator) Refresh(
 	databaseMigrations := make(database.Migrations, len(migrations))
 	for i := range migrations {
 		databaseMigrations[i] = database.Migration{
-			Migrate: migrations[i].Migrate,
+			Migrate:  migrations[i].Migrate,
 			Rollback: migrations[i].Rollback,
 			Version: database.Version{
-				Name: migrations[i].Version.Name,
+				Name:  migrations[i].Version.Name,
 				Batch: database.Batch(migrations[i].Version.Batch),
-				Order: database.Order(migrations[i].Version.Order),
+				ID:    database.ID(migrations[i].Version.ID),
 			},
 		}
 	}

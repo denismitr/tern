@@ -22,8 +22,8 @@ func WithVersions(versions ...Version) ActionConfigurator {
 	return func(a *Action) {
 		for i := range versions {
 			a.versions = append(a.versions, database.Version{
-				Name: versions[i].Name,
-				Order: database.Order(versions[i].Order),
+				Name:  versions[i].Name,
+				ID:    database.ID(versions[i].ID),
 				Batch: database.Batch(versions[i].Batch),
 			})
 		}
@@ -41,7 +41,7 @@ func CreateConfigurators(steps int, versionOrders []uint) ([]ActionConfigurator,
 		var versions []Version
 		for _, order := range versionOrders {
 			versions = append(versions, Version{
-				Order: Order(order),
+				ID: ID(order),
 			})
 		}
 		configurators = append(configurators, WithVersions(versions...))

@@ -11,12 +11,12 @@ var ErrInvalidMigrationInput = errors.New("invalid migration input")
 
 type (
 	Batch uint
-	Order uint
+	ID    uint
 
 	Version struct {
 		Name       string
 		Batch      Batch
-		Order      Order
+		ID         ID
 		MigratedAt time.Time
 	}
 
@@ -34,7 +34,7 @@ func (m Migrations) Len() int {
 }
 
 func (m Migrations) Less(i, j int) bool {
-	return m[i].Version.Order < m[j].Version.Order
+	return m[i].Version.ID < m[j].Version.ID
 }
 
 func (m Migrations) Swap(i, j int) {
@@ -43,7 +43,7 @@ func (m Migrations) Swap(i, j int) {
 
 func InVersions(version Version, versions []Version) bool {
 	for _, v := range versions {
-		if v.Order == version.Order {
+		if v.ID == version.ID {
 			return true
 		}
 	}

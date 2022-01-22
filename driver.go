@@ -1,9 +1,9 @@
 package tern
 
 import (
+	"context"
 	"database/sql"
-
-	"github.com/pkg/errors"
+	"time"
 
 	"github.com/denismitr/tern/v3/internal/database"
 	"github.com/denismitr/tern/v3/internal/database/sqlgateway"
@@ -15,6 +15,7 @@ type (
 	CommonOptions struct {
 		MigrationsTable string
 		Charset         string
+		Timeout         time.Duration
 	}
 
 	driverConfig struct {
@@ -24,13 +25,14 @@ type (
 		sqliteOptions   *SqliteOptions
 	}
 
-	Configurator func(cfg *driverConfig)
+	Configurator interface {
+		configure(sql *sql.Conn) (database.Effector, Dialect, error)
+	}
 
 	MySQLOptions struct {
 		CommonOptions
 		LockKey string
 		LockFor int // maybe refactor to duration
-		NoLock  bool
 	}
 
 	PostgresOptions struct {
@@ -46,9 +48,9 @@ type (
 )
 
 const (
-	MySQL    = Dialect("mysql")
-	Postgres = Dialect("postgres")
-	Sqlite   = Dialect("sqlite")
+	MySQLDialect    = Dialect("mysql")
+	PostgresDialect = Dialect("postgres")
+	SqliteDialect   = Dialect("sqlite")
 
 	DefaultMigrationsTable = "migrations"
 )
@@ -58,76 +60,53 @@ type Driver struct {
 	effector database.Effector
 }
 
-func WithSqlConnection(conn *sql.Conn) Configurator {
-	return func(cfg *driverConfig) {
-		cfg.sqlConn = conn
+func NewDefaultMySQLOptions() MySQLOptions {
+	return MySQLOptions{
+		CommonOptions: CommonOptions{
+			MigrationsTable: DefaultMigrationsTable,
+			Charset: "utf8",
+		},
+		LockKey: "",
+		LockFor: 0,
 	}
 }
 
-func WithMySQLOptions(options MySQLOptions) Configurator {
-	return func(cfg *driverConfig) {
-		cfg.mysqlOptions = &options
-	}
-}
-
-func WithPostgresOptions(options PostgresOptions) Configurator {
-	return func(cfg *driverConfig) {
-		cfg.postgresOptions = &options
-	}
-}
-
-func NewDriver(dialect Dialect, configurators ...Configurator) (*Driver, error) {
-	var cfg driverConfig
-
-	for _, configurator := range configurators {
-		configurator(&cfg)
-	}
-
-	if cfg.sqlConn == nil {
-		return nil, errors.New("opened SQL connection is required")
+func NewSQLDriver(db *sql.DB, configurator Configurator) (*Driver, CloserFunc, error) {
+	conn, err := db.Conn(context.TODO())
+	if err != nil {
+		return nil, nil, err // TODO: wrap
 	}
 
 	var drv Driver
-	var db database.Effector
-	var err error
-	switch dialect {
-	case MySQL:
-		db, err = createMySql(cfg)
-	case Postgres:
-		db, err = createPostgres(cfg)
-	case Sqlite:
-		db, err = createSqlite(cfg)
-	default:
-		return nil, errors.Errorf("invalid dialect %s", dialect)
-	}
 
+	effector, dialect, err := configurator.configure(conn)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	drv.effector = db
+	drv.effector = effector
+	drv.dialect = dialect
 
-	return &drv, nil
+	return &drv, func() error { return conn.Close() }, nil
 }
 
-func createMySql(cfg driverConfig) (database.Effector, error) {
-	if cfg.mysqlOptions == nil {
-		cfg.mysqlOptions = &MySQLOptions{
-			CommonOptions: CommonOptions{
-				MigrationsTable: DefaultMigrationsTable,
-			},
-			NoLock: true,
-		}
+func (mysql MySQLOptions) configure(conn *sql.Conn) (database.Effector, Dialect, error) {
+	if mysql.MigrationsTable == "" {
+		mysql.MigrationsTable = DefaultMigrationsTable
+	}
+
+	if mysql.Charset == "" {
+		mysql.Charset = "utf8"
 	}
 
 	return sqlgateway.NewMySQLGateway(
-		cfg.sqlConn,
-		cfg.mysqlOptions.MigrationsTable,
-		cfg.mysqlOptions.LockKey,
-		cfg.mysqlOptions.LockFor,
-		cfg.mysqlOptions.NoLock,
-		cfg.mysqlOptions.Charset,
-	), nil
+		conn,
+		mysql.MigrationsTable,
+		mysql.LockKey,
+		mysql.LockFor,
+		mysql.LockFor == 0 || mysql.LockKey == "",
+		mysql.Charset,
+	), MySQLDialect, nil
 }
 
 func createPostgres(cfg driverConfig) (database.Effector, error) {

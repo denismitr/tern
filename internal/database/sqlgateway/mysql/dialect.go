@@ -19,7 +19,7 @@ func NewDialect(migrationsTable, charset string) *Dialect {
 func (d Dialect) InitQuery() string {
 	const createSQL = `
 		CREATE TABLE IF NOT EXISTS %s (
-			order BIGINT PRIMARY KEY,
+			id BIGINT PRIMARY KEY,
 			batch BIGINT,
 			name VARCHAR(120),
 			migrated_at TIMESTAMP default CURRENT_TIMESTAMP
@@ -30,7 +30,7 @@ func (d Dialect) InitQuery() string {
 }
 
 func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error) {
-	const insertSQL = "INSERT INTO %s (`order`, `batch`, `name`, `migrated_at`) VALUES (?, ?, ?, ?);"
+	const insertSQL = "INSERT INTO %s (`id`, `batch`, `name`, `migrated_at`) VALUES (?, ?, ?, ?);"
 
 	// TODO: validation
 	return fmt.Sprintf(insertSQL, d.migrationsTable), []interface{}{
@@ -42,7 +42,7 @@ func (d Dialect) InsertQuery(m database.Migration) (string, []interface{}, error
 }
 
 func (d Dialect) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error) {
-	var readSQL = "SELECT `order`, `name`, `batch`, `migrated_at` FROM %s"
+	var readSQL = "SELECT `id`, `name`, `batch`, `migrated_at` FROM %s"
 
 	// TODO: optimize with bytes.Buffer
 
@@ -55,16 +55,16 @@ func (d Dialect) ReadVersionsQuery(f database.ReadVersionsFilter) (string, error
 	}
 
 	if f.Sort == database.DESC {
-		readSQL += " ORDER BY `order` DESC"
+		readSQL += " ORDER BY `id` DESC"
 	} else {
-		readSQL += " ORDER BY `order` ASC"
+		readSQL += " ORDER BY `id` ASC"
 	}
 
 	return fmt.Sprintf(readSQL, d.migrationsTable), nil
 }
 
 func (d Dialect) RemoveQuery(m database.Migration) (string, []interface{}, error) {
-	const removeSQL = "DELETE FROM %s WHERE `order` = ?;"
+	const removeSQL = "DELETE FROM %s WHERE `id` = ?;"
 	// TODO: validation
 	return fmt.Sprintf(removeSQL, d.migrationsTable), []interface{}{m.Version}, nil
 }

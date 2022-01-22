@@ -2,12 +2,12 @@ package tern
 
 type (
 	Batch uint
-	Order uint
+	ID    uint
 
 	Version struct {
-		Name       string
-		Batch      Batch
-		Order      Order
+		Name  string
+		Batch Batch
+		ID    ID
 	}
 
 	Migration struct {
